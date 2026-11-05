@@ -1,0 +1,30 @@
+# Flutter / Dart
+.dart_tool/
+.fvm/
+.packages
+.pub-cache/
+build/
+*.iml
+.idea/
+.vscode/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+
+# Generated (rebuilt by build_runner in bootstrap and CI)
+*.g.dart
+*.freezed.dart
+
+# Secrets and local config: never commit
+env/*.json
+!env/*.example.json
+*.jks
+*.keystore
+key.properties
+google-services.json
+GoogleService-Info.plist
+.env
+.env.*
+
+# OS
+.DS_Store
