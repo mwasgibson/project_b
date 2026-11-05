@@ -12,7 +12,7 @@ Records where you go (with permission), turns it into visits and trips, and puts
 ORG=com.yourname.projectb ./tool/bootstrap.sh
 fvm flutter run        # pick the Samsung or the iOS simulator
 ```
-`.fvmrc` pins Flutter 3.38.10, which works on macOS 13; the newer Flutter SDK currently on the machine requires macOS 14. `bootstrap.sh` installs the pinned SDK through FVM, generates the `android/` and `ios/` folders, resolves the declared dependencies, runs Drift code generation, then analyzes and tests the project.
+`.fvmrc` pins Flutter 3.38.10, which works on macOS 13; the newer Flutter SDK currently on the machine requires macOS 14. Run `fvm use 3.38.10` to create the project SDK link; the VS Code workspace is configured to use it instead of a globally installed Flutter. `bootstrap.sh` installs the pinned SDK through FVM, generates the `android/` and `ios/` folders, resolves the declared dependencies, runs Drift code generation, then analyzes and tests the project.
 
 Needs: FVM, Android Studio, and a Java 17–24 JDK for Android builds (the Gradle 8.14 wrapper is not compatible with Java 25). Xcode is required for iOS. Run `fvm flutter doctor` first; if it selects Java 25 from Android Studio, install JDK 17 and select it with `fvm flutter config --jdk-dir=<JDK_HOME>`.
 
