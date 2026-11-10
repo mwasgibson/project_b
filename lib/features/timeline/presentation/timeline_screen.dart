@@ -41,7 +41,6 @@ class TimelineScreen extends ConsumerWidget {
               child: TrackingStatusChip(
                 status: status,
                 onTap: () {
-                  // Tracking settings land in Phase 8; for now go to background flow.
                   if (status == TrackingStatus.needsPermission ||
                       status == TrackingStatus.off) {
                     context.push(Routes.onboardingBackground);
@@ -56,8 +55,9 @@ class TimelineScreen extends ConsumerWidget {
                 message:
                     'Turn on location in your phone settings so Project B can record visits.',
                 actionLabel: 'Open settings',
-                onAction: () =>
-                    ref.read(permissionServiceProvider).openAppSettings(),
+                onAction: () => ref
+                    .read(permissionServiceProvider)
+                    .openSystemAppSettings(),
               )
             else if (snap != null && !snap.hasForeground)
               _PermissionCard(
@@ -70,7 +70,9 @@ class TimelineScreen extends ConsumerWidget {
                     : 'Allow location',
                 onAction: () async {
                   if (snap.foregroundPermanentlyDenied) {
-                    await ref.read(permissionServiceProvider).openAppSettings();
+                    await ref
+                        .read(permissionServiceProvider)
+                        .openSystemAppSettings();
                   } else {
                     await ref
                         .read(permissionServiceProvider)

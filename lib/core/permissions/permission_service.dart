@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
 
 /// Snapshot of the location-related permissions the app cares about.
 class LocationPermissionSnapshot {
@@ -15,10 +15,10 @@ class LocationPermissionSnapshot {
   final bool serviceEnabled;
 
   /// While-in-use / fine location granted.
-  final PermissionStatus foreground;
+  final ph.PermissionStatus foreground;
 
   /// Always / background location granted.
-  final PermissionStatus background;
+  final ph.PermissionStatus background;
 
   bool get hasForeground =>
       foreground.isGranted || foreground.isLimited;
@@ -32,17 +32,16 @@ class LocationPermissionSnapshot {
       background.isPermanentlyDenied;
 }
 
-/// Wraps [permission_handler] so screens do not import the package directly.
-/// Tracking itself stays behind [LocationTracker] (Phase 3).
+/// Wraps permission_handler so screens do not import the package directly.
+/// Tracking itself stays behind LocationTracker (Phase 3).
 class PermissionService {
   Future<bool> isLocationServiceEnabled() =>
-      Permission.location.serviceStatus.isEnabled;
+      ph.Permission.location.serviceStatus.isEnabled;
 
   Future<LocationPermissionSnapshot> snapshot() async {
     final serviceEnabled = await isLocationServiceEnabled();
-    final foreground = await Permission.locationWhenInUse.status;
-    // On Android, background is a separate permission; on iOS, Always.
-    final background = await Permission.locationAlways.status;
+    final foreground = await ph.Permission.locationWhenInUse.status;
+    final background = await ph.Permission.locationAlways.status;
     return LocationPermissionSnapshot(
       serviceEnabled: serviceEnabled,
       foreground: foreground,
@@ -51,21 +50,21 @@ class PermissionService {
   }
 
   /// Request while-in-use first (F1 / Flow A step 2).
-  Future<PermissionStatus> requestForeground() =>
-      Permission.locationWhenInUse.request();
+  Future<ph.PermissionStatus> requestForeground() =>
+      ph.Permission.locationWhenInUse.request();
 
   /// Request Always / background. Call only after the in-app disclosure (S3).
-  Future<PermissionStatus> requestBackground() =>
-      Permission.locationAlways.request();
+  Future<ph.PermissionStatus> requestBackground() =>
+      ph.Permission.locationAlways.request();
 
-  Future<PermissionStatus> requestNotifications() =>
-      Permission.notification.request();
+  Future<ph.PermissionStatus> requestNotifications() =>
+      ph.Permission.notification.request();
 
-  Future<PermissionStatus> notificationStatus() =>
-      Permission.notification.status;
+  Future<ph.PermissionStatus> notificationStatus() =>
+      ph.Permission.notification.status;
 
   /// Opens the OS settings page for this app.
-  Future<bool> openAppSettings() => openAppSettings();
+  Future<bool> openSystemAppSettings() => ph.openAppSettings();
 
   /// Whether we are on a platform that supports these permission APIs.
   bool get isMobile =>
