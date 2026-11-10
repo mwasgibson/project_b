@@ -8,10 +8,10 @@ import '../../../core/providers.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/settings/setting_keys.dart';
 import '../../../core/widgets/content_width.dart';
+import '../../../domain/tracking/location_tracker.dart';
+import '../../tracking/tracking_providers.dart';
 
 /// S3 — prominent disclosure, then system Always / background prompt.
-/// Shown when the user taps Start tracking, not on first launch.
-/// After this screen runs once, Timeline will not reopen it in a loop.
 class BackgroundPermissionScreen extends ConsumerStatefulWidget {
   const BackgroundPermissionScreen({super.key});
 
@@ -28,31 +28,36 @@ class _BackgroundPermissionScreenState
     setState(() => _busy = true);
     final service = ref.read(permissionServiceProvider);
 
-    // Mark disclosure seen up front so a back navigation still breaks the loop.
     await markBackgroundDisclosureShown(ref);
 
     final bg = await service.requestBackground();
     ref.invalidate(locationPermissionProvider);
 
-    // Phase 2: user opted into tracking. Engine arrives in Phase 3.
-    // Persist the intent even if Always was not granted yet (they may
-    // finish it in system settings).
     await ref
         .read(settingsRepositoryProvider)
         .write(SettingKeys.trackingEnabled, 'true');
 
+    final mode = ref.read(trackingModeSettingProvider).valueOrNull ??
+        TrackingMode.balanced;
+
+    // Start the engine if we at least have foreground (Always is best-effort).
+    final snap = await service.snapshot();
+    if (snap.hasForeground) {
+      await ref.read(locationTrackerProvider).start(mode);
+    }
+
     if (!mounted) return;
 
     if (!bg.isGranted) {
-      final messenger = ScaffoldMessenger.of(context);
-      messenger.showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             bg.isPermanentlyDenied
                 ? 'Background location is blocked. Open system settings and '
                     'set location to "Allow all the time".'
                 : 'For tracking with the app closed, set location to '
-                    '"Allow all the time" in system settings.',
+                    '"Allow all the time" in system settings. Tracking while '
+                    'open has started.',
           ),
           action: SnackBarAction(
             label: 'Settings',
@@ -67,7 +72,6 @@ class _BackgroundPermissionScreenState
   }
 
   Future<void> _notNow() async {
-    // Still count as shown so we do not keep forcing this screen.
     await markBackgroundDisclosureShown(ref);
     if (!mounted) return;
     context.go(Routes.timeline);

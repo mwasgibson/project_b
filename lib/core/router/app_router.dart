@@ -6,7 +6,9 @@ import '../../features/onboarding/presentation/background_permission_screen.dart
 import '../../features/onboarding/presentation/location_permission_screen.dart';
 import '../../features/onboarding/presentation/welcome_screen.dart';
 import '../../features/settings/presentation/appearance_screen.dart';
+import '../../features/settings/presentation/keep_alive_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
+import '../../features/settings/presentation/tracking_settings_screen.dart';
 import '../../features/timeline/presentation/timeline_screen.dart';
 import '../../features/weather/presentation/weather_screen.dart';
 import '../permissions/permission_providers.dart';
@@ -22,6 +24,8 @@ abstract final class Routes {
   static const weather = '/weather';
   static const settings = '/settings';
   static const appearance = '/settings/appearance';
+  static const trackingSettings = '/settings/tracking';
+  static const keepAlive = '/help/keep-alive';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -33,7 +37,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       final path = state.uri.path;
       final inOnboarding = path.startsWith('/onboarding');
 
-      // Still loading settings — do not redirect yet.
       if (onboarding.isLoading) return null;
 
       final completed = onboarding.value ?? false;
@@ -58,6 +61,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.onboardingBackground,
         builder: (context, state) => const BackgroundPermissionScreen(),
+      ),
+      GoRoute(
+        path: Routes.keepAlive,
+        builder: (context, state) => const KeepAliveScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(shell: shell),
@@ -95,6 +102,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'appearance',
                     builder: (context, state) => const AppearanceScreen(),
+                  ),
+                  GoRoute(
+                    path: 'tracking',
+                    builder: (context, state) => const TrackingSettingsScreen(),
                   ),
                 ],
               ),
