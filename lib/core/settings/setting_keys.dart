@@ -2,6 +2,8 @@
 abstract final class SettingKeys {
   static const theme = 'theme';
   static const onboardingCompleted = 'onboarding_completed';
+  /// User has seen S3 (background disclosure) at least once.
+  static const backgroundDisclosureShown = 'background_disclosure_shown';
   static const trackingEnabled = 'tracking_enabled';
   static const trackingMode = 'tracking_mode';
   static const autoSaverEnabled = 'auto_saver_enabled';

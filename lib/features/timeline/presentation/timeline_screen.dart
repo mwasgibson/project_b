@@ -14,21 +14,28 @@ import '../../../domain/tracking/location_tracker.dart';
 class TimelineScreen extends ConsumerWidget {
   const TimelineScreen({super.key});
 
-  TrackingStatus _statusFrom(LocationPermissionSnapshot? snap) {
+  TrackingStatus _statusFrom({
+    required LocationPermissionSnapshot? snap,
+    required bool trackingEnabled,
+  }) {
     if (snap == null) return TrackingStatus.off;
     if (!snap.serviceEnabled) return TrackingStatus.locationServicesOff;
     if (!snap.hasForeground) return TrackingStatus.needsPermission;
-    if (!snap.hasBackground) return TrackingStatus.off;
-    // Tracking engine is Phase 3; with background granted we still show off
-    // until the engine starts writing points.
+    // Engine is Phase 3; until then stay "off" even when permissions are ready.
+    if (trackingEnabled && snap.hasForeground) return TrackingStatus.off;
     return TrackingStatus.off;
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final perm = ref.watch(locationPermissionProvider);
+    final disclosure = ref.watch(backgroundDisclosureShownProvider);
+    final tracking = ref.watch(trackingEnabledProvider);
+
     final snap = perm.valueOrNull;
-    final status = _statusFrom(snap);
+    final disclosureShown = disclosure.valueOrNull ?? false;
+    final trackingEnabled = tracking.valueOrNull ?? false;
+    final status = _statusFrom(snap: snap, trackingEnabled: trackingEnabled);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Timeline')),
@@ -41,8 +48,11 @@ class TimelineScreen extends ConsumerWidget {
               child: TrackingStatusChip(
                 status: status,
                 onTap: () {
-                  if (status == TrackingStatus.needsPermission ||
-                      status == TrackingStatus.off) {
+                  // Only open S3 the first time; afterwards send to settings.
+                  if (snap != null &&
+                      snap.hasForeground &&
+                      !snap.hasBackground &&
+                      !disclosureShown) {
                     context.push(Routes.onboardingBackground);
                   }
                 },
@@ -81,7 +91,11 @@ class TimelineScreen extends ConsumerWidget {
                   }
                 },
               )
-            else if (snap != null && snap.hasForeground && !snap.hasBackground)
+            else if (snap != null &&
+                snap.hasForeground &&
+                !snap.hasBackground &&
+                !disclosureShown)
+              // First time only: offer the disclosure + system prompt.
               _PermissionCard(
                 title: 'Start tracking',
                 message:
@@ -90,13 +104,38 @@ class TimelineScreen extends ConsumerWidget {
                 actionLabel: 'Start tracking',
                 onAction: () => context.push(Routes.onboardingBackground),
               )
-            else
-              const EmptyState(
-                icon: Icons.route_outlined,
-                title: 'Nothing recorded yet',
+            else if (snap != null &&
+                snap.hasForeground &&
+                !snap.hasBackground &&
+                disclosureShown)
+              // Already went through S3; do not loop — send to system settings.
+              _PermissionCard(
+                title: 'Allow all the time',
                 message:
-                    'When tracking is on, the places you visit and the trips '
-                    'between them appear here.',
+                    'Tracking with the app closed needs "Allow all the time" '
+                    '(Android) or "Always" (iOS). Open system settings for '
+                    'Project B and set location access there.',
+                actionLabel: 'Open settings',
+                onAction: () => ref
+                    .read(permissionServiceProvider)
+                    .openSystemAppSettings(),
+              )
+            else
+              EmptyState(
+                icon: Icons.route_outlined,
+                title: trackingEnabled
+                    ? 'Tracking is ready'
+                    : 'Nothing recorded yet',
+                message: trackingEnabled
+                    ? 'Permissions look good. The tracking engine arrives in '
+                        'the next phase — for now nothing is written yet.'
+                    : 'When tracking is on, the places you visit and the trips '
+                        'between them appear here.',
+                actionLabel:
+                    trackingEnabled || disclosureShown ? null : 'Start tracking',
+                onAction: trackingEnabled || disclosureShown
+                    ? null
+                    : () => context.push(Routes.onboardingBackground),
               ),
           ],
         ),

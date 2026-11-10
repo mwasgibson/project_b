@@ -53,9 +53,27 @@ class PermissionService {
   Future<ph.PermissionStatus> requestForeground() =>
       ph.Permission.locationWhenInUse.request();
 
-  /// Request Always / background. Call only after the in-app disclosure (S3).
-  Future<ph.PermissionStatus> requestBackground() =>
-      ph.Permission.locationAlways.request();
+  /// Request Always / background. Call only after the in-app disclosure (S3)
+  /// and only when foreground is already granted.
+  ///
+  /// On Android 10+, the system often opens a second screen or app settings
+  /// for "Allow all the time". If the user leaves without granting, status
+  /// stays denied — callers must not re-show the same dialog in a loop.
+  Future<ph.PermissionStatus> requestBackground() async {
+    final whenInUse = await ph.Permission.locationWhenInUse.status;
+    if (!whenInUse.isGranted && !whenInUse.isLimited) {
+      final fg = await ph.Permission.locationWhenInUse.request();
+      if (!fg.isGranted && !fg.isLimited) return fg;
+    }
+
+    final current = await ph.Permission.locationAlways.status;
+    if (current.isGranted) return current;
+
+    // Already decided against Always — do not spam the system dialog.
+    if (current.isPermanentlyDenied) return current;
+
+    return ph.Permission.locationAlways.request();
+  }
 
   Future<ph.PermissionStatus> requestNotifications() =>
       ph.Permission.notification.request();

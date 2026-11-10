@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/permissions/permission_providers.dart';
+import '../../../core/providers.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/settings/setting_keys.dart';
-import '../../../core/providers.dart';
 import '../../../core/widgets/content_width.dart';
 
 /// S3 — prominent disclosure, then system Always / background prompt.
 /// Shown when the user taps Start tracking, not on first launch.
+/// After this screen runs once, Timeline will not reopen it in a loop.
 class BackgroundPermissionScreen extends ConsumerStatefulWidget {
   const BackgroundPermissionScreen({super.key});
 
@@ -27,31 +27,47 @@ class _BackgroundPermissionScreenState
     setState(() => _busy = true);
     final service = ref.read(permissionServiceProvider);
 
-    // Ensure foreground first (Android requires this order).
-    final fg = await service.requestForeground();
-    if (!fg.isGranted && !fg.isLimited) {
-      ref.invalidate(locationPermissionProvider);
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Foreground location is required before background tracking.',
-          ),
-        ),
-      );
-      return;
-    }
+    // Mark disclosure seen up front so a back navigation still breaks the loop.
+    await markBackgroundDisclosureShown(ref);
 
     final bg = await service.requestBackground();
     ref.invalidate(locationPermissionProvider);
 
-    if (bg.isGranted) {
-      await ref
-          .read(settingsRepositoryProvider)
-          .write(SettingKeys.trackingEnabled, 'true');
+    // Phase 2: user opted into tracking. Engine arrives in Phase 3.
+    // Persist the intent even if Always was not granted yet (they may
+    // finish it in system settings).
+    await ref
+        .read(settingsRepositoryProvider)
+        .write(SettingKeys.trackingEnabled, 'true');
+
+    if (!mounted) return;
+
+    if (!bg.isGranted) {
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            bg.isPermanentlyDenied
+                ? 'Background location is blocked. Open system settings and '
+                    'set location to "Allow all the time".'
+                : 'For tracking with the app closed, set location to '
+                    '"Allow all the time" in system settings.',
+          ),
+          action: SnackBarAction(
+            label: 'Settings',
+            onPressed: () => service.openSystemAppSettings(),
+          ),
+        ),
+      );
     }
 
+    if (!mounted) return;
+    context.go(Routes.timeline);
+  }
+
+  Future<void> _notNow() async {
+    // Still count as shown so we do not keep forcing this screen.
+    await markBackgroundDisclosureShown(ref);
     if (!mounted) return;
     context.go(Routes.timeline);
   }
@@ -65,7 +81,7 @@ class _BackgroundPermissionScreenState
         title: const Text('Background location'),
         leading: IconButton(
           icon: const Icon(Icons.close),
-          onPressed: () => context.go(Routes.timeline),
+          onPressed: _busy ? null : _notNow,
         ),
       ),
       body: SafeArea(
@@ -111,8 +127,8 @@ class _BackgroundPermissionScreenState
                       const SizedBox(height: 12),
                       Text(
                         'On the next screen, choose “Allow all the time” '
-                        '(Android) or “Always” (iOS). Anything less means '
-                        'tracking will stop when you leave the app.',
+                        '(Android) or “Always” (iOS). “While using the app” is '
+                        'not enough for a full timeline.',
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -132,7 +148,7 @@ class _BackgroundPermissionScreenState
                 ),
                 const SizedBox(height: 8),
                 TextButton(
-                  onPressed: _busy ? null : () => context.go(Routes.timeline),
+                  onPressed: _busy ? null : _notNow,
                   child: const Text('Not now'),
                 ),
               ],

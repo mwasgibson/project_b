@@ -22,8 +22,29 @@ final onboardingCompletedProvider = StreamProvider<bool>((ref) {
       );
 });
 
+/// True after the user has been through S3 at least once.
+final backgroundDisclosureShownProvider = StreamProvider<bool>((ref) {
+  final repo = ref.watch(settingsRepositoryProvider);
+  return repo.watch(SettingKeys.backgroundDisclosureShown).map(
+        (raw) => raw == 'true',
+      );
+});
+
+final trackingEnabledProvider = StreamProvider<bool>((ref) {
+  final repo = ref.watch(settingsRepositoryProvider);
+  return repo.watch(SettingKeys.trackingEnabled).map(
+        (raw) => raw == 'true',
+      );
+});
+
 Future<void> markOnboardingCompleted(WidgetRef ref) async {
   await ref
       .read(settingsRepositoryProvider)
       .write(SettingKeys.onboardingCompleted, 'true');
+}
+
+Future<void> markBackgroundDisclosureShown(WidgetRef ref) async {
+  await ref
+      .read(settingsRepositoryProvider)
+      .write(SettingKeys.backgroundDisclosureShown, 'true');
 }
