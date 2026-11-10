@@ -45,22 +45,25 @@ class TrackingSettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Card(
-              child: Column(
-                children: [
-                  for (final m in TrackingMode.values) ...[
-                    if (m != TrackingMode.values.first) const Divider(height: 1),
-                    RadioListTile<TrackingMode>(
-                      value: m,
-                      groupValue: mode,
-                      title: Text(_modeTitle(m)),
-                      subtitle: Text(_modeSubtitle(m)),
-                      onChanged: (value) async {
-                        if (value == null) return;
-                        await setTrackingModeSetting(ref, value);
-                      },
-                    ),
+              child: RadioGroup<TrackingMode>(
+                groupValue: mode,
+                onChanged: (value) async {
+                  if (value == null) return;
+                  await setTrackingModeSetting(ref, value);
+                },
+                child: Column(
+                  children: [
+                    for (final m in TrackingMode.values) ...[
+                      if (m != TrackingMode.values.first)
+                        const Divider(height: 1),
+                      RadioListTile<TrackingMode>(
+                        value: m,
+                        title: Text(_modeTitle(m)),
+                        subtitle: Text(_modeSubtitle(m)),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
             const SizedBox(height: 24),

@@ -203,7 +203,7 @@ class TimelineScreen extends ConsumerWidget {
                 actionLabel: 'Start tracking',
                 onAction: () async {
                   if (!disclosureShown && snap.hasForeground && !snap.hasBackground) {
-                    context.push(Routes.onboardingBackground);
+                    await context.push(Routes.onboardingBackground);
                     return;
                   }
                   await _startTracking(ref, mode);

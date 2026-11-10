@@ -18,7 +18,7 @@ final locationTrackerProvider = Provider<LocationTracker>((ref) {
   );
   ref.onDispose(() {
     // ignore: avoid_dynamic_calls
-    (tracker as GeolocatorLocationTracker).dispose();
+    (tracker).dispose();
   });
   return tracker;
 });
