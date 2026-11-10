@@ -9,11 +9,13 @@ environment:
 # Keep Drift and its generator on the same release: drift_dev 2.34.0 is
 # incompatible with drift 2.34.4 despite accepting it in its version range.
 dependencies:
+  battery_plus: ^6.2.1
   drift: 2.34.0
   drift_flutter: ^0.3.1
   flutter:
     sdk: flutter
   flutter_riverpod: ^2.6.1
+  geolocator: ^13.0.2
   go_router: ^17.5.0
   intl: ^0.20.3
   path_provider: ^2.1.6
