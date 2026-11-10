@@ -16,31 +16,31 @@ Tracking feature IDs refer to doc 01 (F1 to F9). Screen IDs refer to doc 03.
 ### Phase 0: Setup and decisions
 Goal: a clean repo and a working "hello world" on your Samsung.
 Tasks:
-- [ ] Install Flutter, Android Studio, Xcode (on the Mac); run `flutter doctor` clean.
-- [ ] Create repo, add `docs/` from this kickoff, set up lint rules and CI (analyze + test).
-- [ ] Pick the app name and package/bundle id.
-- [ ] Create the dev Supabase project (do not wire it up yet).
-- [ ] Decide: do you have an iPhone for testing?
+- [x] Install Flutter, Android Studio, Xcode (on the Mac); run `flutter doctor` clean.
+- [x] Create repo, add `docs/` from this kickoff, set up lint rules and CI (analyze + test).
+- [x] App name: Project B (display); package remains without underscore.
+- [ ] Create the dev Supabase project (do not wire it up yet) — deferred to Phase 9.
+- [x] No physical iPhone planned; Android-first for tracking, iOS simulator for UI only.
 Done when: the blank app runs on the Samsung and in the iOS simulator, and CI is green.
 
 ### Phase 1: Foundations
 Goal: app shell with navigation, theme and local database.
 Tasks:
-- [ ] App structure (feature folders), Riverpod, router with the four tabs (doc 03).
-- [ ] Theme: light/dark/system from doc 04 tokens; check contrast.
-- [ ] Drift database with the local tables from doc 05 and migration tests.
-- [ ] Settings store and S16 Appearance (F8 part).
-- [ ] Reusable components: status chip, rows, empty states, skeletons.
+- [x] App structure (feature folders), Riverpod, router with the four tabs (doc 03).
+- [x] Theme: light/dark/system from doc 04 tokens; check contrast.
+- [x] Drift database with the local tables from doc 05 and migration tests.
+- [x] Settings store and S16 Appearance (F8 part).
+- [x] Reusable components: status chip, rows, empty states, skeletons.
 Done when: you can switch themes, navigate all tabs with placeholder content, and DB migrations pass tests.
 
 ### Phase 2: Onboarding and permissions (F1)
 Goal: honest, correct permission flow.
 Tasks:
-- [ ] Screens S1 to S4 and S3's prominent disclosure.
-- [ ] Android manifest and iOS Info.plist entries (doc 02).
-- [ ] Foreground-first, background-on-enable logic; denied/revoked states.
+- [x] Screens S1–S3 and S3's prominent disclosure (S4 deferred to Phase 6 with first reminder).
+- [x] Android manifest and iOS Info.plist entries (doc 02).
+- [x] Foreground-first, background-on-enable logic; denied/revoked states on Timeline.
 - [ ] Draft the privacy policy text and in-app disclosure copy (needed again in Phase 10).
-Done when: every permission path (granted, denied, later revoked) behaves as in doc 03 on both platforms.
+Done when: every permission path (granted, denied, later revoked) behaves as in doc 03 on Android (primary); iOS simulator for UI checks.
 
 ### Phase 3: Tracking engine (F2, F3), the riskiest phase
 Goal: reliable background tracking you can trust.
@@ -53,7 +53,7 @@ Tasks:
 - [ ] Keep-alive guide S22 for Samsung battery optimisation.
 - [ ] Head-to-head test of a free native-service plugin against the first one; record results.
 - [ ] Battery log: note battery % at fixed times per mode over several days.
-- [ ] iOS: Always permission, significant-change/visit handling; test on a real iPhone if you have one.
+- [ ] iOS: Always permission, significant-change/visit handling — deferred until a real iPhone is available; keep interface clean so iOS can land later.
 Done when: 3 consecutive days of normal life on the Samsung with screen off give a plausible point trail with no unexplained gaps over 30 minutes, and balanced mode battery cost is within the target in doc 01.
 
 ### Phase 4: Segmentation and timeline (F4)
@@ -168,7 +168,7 @@ flowchart LR
 | OS kills background tracking | Foreground service, keep-alive guide, health check, early multi-day tests (Phase 3) |
 | Plugin licence cost / lock-in | Interface + free alternative test before Phase 10 |
 | Play Store rejection | Follow doc 02 and research doc section 4 from Phase 2 onwards, not at the end |
-| No iPhone for iOS tracking tests | Get a device before iOS work in Phase 3; simulator is not enough |
+| No iPhone for iOS tracking tests | Android-first; keep LocationTracker interface; iOS when hardware appears |
 | Battery complaints | Modes, auto-saver, battery log in Phase 3 |
 | E2EE data loss | Recovery key, clear copy, tested restore path |
 | Scope creep | Only features in doc 01 MVP before the checkpoint |
@@ -177,3 +177,6 @@ flowchart LR
 ## Progress log
 - 2026-10-22: Planning docs 00 to 06 created. No code written yet.
 - 2026-10-24: Phase 0 skeleton and Phase 1 foundations written (theme, router, Drift schema, settings, shell, tests, bootstrap). Not compiled: no Flutter SDK in the authoring environment. Palette contrast verified numerically; added `outlineStrong` token so control borders meet 3:1.
+- 2026-11-05: Phase 1 verified on Samsung.
+- 2026-11-10: iOS simulator build fixed (xcode-select / objective_c native assets); UI good. Decisions: display name Project B; no iPhone soon → Android-first; Supabase at Phase 9.
+- 2026-11-10: Phase 2 onboarding + permissions pushed (S1–S3, PermissionService, manifest/plist, Timeline permission cards). Awaiting Samsung verification of grant/deny paths.
