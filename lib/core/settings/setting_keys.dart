@@ -1,6 +1,7 @@
 /// Keys stored in the `app_settings` table (docs/05, settings).
 abstract final class SettingKeys {
   static const theme = 'theme';
+  static const onboardingCompleted = 'onboarding_completed';
   static const trackingEnabled = 'tracking_enabled';
   static const trackingMode = 'tracking_mode';
   static const autoSaverEnabled = 'auto_saver_enabled';
