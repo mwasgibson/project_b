@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/permissions/permission_providers.dart';
-import '../../../core/providers.dart';
 import '../../../core/router/app_router.dart';
-import '../../../core/settings/setting_keys.dart';
 import '../../../core/widgets/content_width.dart';
 import '../../../domain/tracking/location_tracker.dart';
 import '../../tracking/tracking_providers.dart';
@@ -33,17 +30,12 @@ class _BackgroundPermissionScreenState
     final bg = await service.requestBackground();
     ref.invalidate(locationPermissionProvider);
 
-    await ref
-        .read(settingsRepositoryProvider)
-        .write(SettingKeys.trackingEnabled, 'true');
-
     final mode = ref.read(trackingModeSettingProvider).valueOrNull ??
         TrackingMode.balanced;
 
-    // Start the engine if we at least have foreground (Always is best-effort).
     final snap = await service.snapshot();
     if (snap.hasForeground) {
-      await ref.read(locationTrackerProvider).start(mode);
+      await ref.read(trackingSessionProvider).start(mode);
     }
 
     if (!mounted) return;

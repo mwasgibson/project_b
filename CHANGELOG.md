@@ -3,19 +3,16 @@
 ## Unreleased
 ### Added
 - Phase 3: GeolocatorLocationTracker writes `raw_points`; pause/resume; battery modes.
-- Android foreground notification ("Project B is tracking") so sampling continues after Home.
+- Android foreground notification so sampling continues after Home.
+- TrackingSession: gaps on pause/permission/stop, auto-saver at low battery, resume on app start.
+- Health label in Tracking settings; 30‑minute stale banner on Timeline.
 - RawPointsRepository; Timeline point count and last sample time.
-- Tracking settings (S14 partial) and Samsung keep-alive guide (S22).
-- Phase 2 onboarding: welcome disclosure (S1), foreground location (S2), background disclosure (S3).
-- PermissionService; Android/iOS permission strings; Timeline permission cards.
+- Tracking settings (S14) and Samsung keep-alive guide (S22).
+- Phase 2 onboarding S1–S3; PermissionService; platform permission strings.
 - Display name Project B.
 
 ### Fixed
-- Permission loop: after S3, show Open settings instead of re-prompting Start tracking.
+- Permission loop after S3.
 
 ### Earlier
-- Project skeleton: feature-first structure, Riverpod, go_router with four tabs.
-- Theme from the design brief (light, dark, system) with contrast tests.
-- Local Drift schema for all tables in docs/05 Part A.
-- Settings store and Appearance screen.
-- Bootstrap script, CI workflow, lint rules.
+- Foundations: theme, router, Drift schema, settings, shell, tests.

@@ -5,16 +5,14 @@ import 'package:intl/intl.dart';
 
 import '../../../core/permissions/permission_providers.dart';
 import '../../../core/permissions/permission_service.dart';
-import '../../../core/providers.dart';
 import '../../../core/router/app_router.dart';
-import '../../../core/settings/setting_keys.dart';
 import '../../../core/widgets/content_width.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/tracking_status_chip.dart';
 import '../../../domain/tracking/location_tracker.dart';
 import '../../tracking/tracking_providers.dart';
 
-/// S5. Phase 3: live tracking status, pause/resume, point count.
+/// S5. Phase 3: live tracking status, pause/resume, point count, health.
 class TimelineScreen extends ConsumerWidget {
   const TimelineScreen({super.key});
 
@@ -31,15 +29,11 @@ class TimelineScreen extends ConsumerWidget {
     return TrackingStatus.off;
   }
 
-  Future<void> _startTracking(WidgetRef ref, TrackingMode mode) async {
-    await ref
-        .read(settingsRepositoryProvider)
-        .write(SettingKeys.trackingEnabled, 'true');
-    await ref.read(locationTrackerProvider).start(mode);
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Ensure session is created (resumes tracking if left on).
+    final session = ref.watch(trackingSessionProvider);
+
     final perm = ref.watch(locationPermissionProvider);
     final disclosure = ref.watch(backgroundDisclosureShownProvider);
     final trackingPref = ref.watch(trackingEnabledProvider);
@@ -58,8 +52,7 @@ class TimelineScreen extends ConsumerWidget {
       trackingEnabled: trackingEnabled,
     );
     final count = pointCount.valueOrNull ?? 0;
-    final tracker = ref.read(locationTrackerProvider);
-    final lastAt = tracker.lastPointAt;
+    final lastAt = session.tracker.lastPointAt;
 
     return Scaffold(
       appBar: AppBar(
@@ -75,9 +68,9 @@ class TimelineScreen extends ConsumerWidget {
               ),
               onPressed: () async {
                 if (status == TrackingStatus.on) {
-                  await tracker.pause();
+                  await session.pause();
                 } else {
-                  await tracker.resume();
+                  await session.resume();
                 }
               },
             ),
@@ -113,6 +106,42 @@ class TimelineScreen extends ConsumerWidget {
                     ),
               ),
             ],
+            if (status == TrackingStatus.on)
+              FutureBuilder<bool>(
+                future: session.isStale(),
+                builder: (context, staleSnap) {
+                  if (staleSnap.data != true) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Material(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.warning_amber_rounded,
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                        ),
+                        title: Text(
+                          'No points for over 30 minutes',
+                          style: TextStyle(
+                            color:
+                                Theme.of(context).colorScheme.onErrorContainer,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Tracking may be blocked by battery optimisation. '
+                          'Open the battery tip and set Unrestricted.',
+                          style: TextStyle(
+                            color:
+                                Theme.of(context).colorScheme.onErrorContainer,
+                          ),
+                        ),
+                        onTap: () => context.push(Routes.keepAlive),
+                      ),
+                    ),
+                  );
+                },
+              ),
             const SizedBox(height: 16),
             if (snap != null && !snap.serviceEnabled)
               _PermissionCard(
@@ -184,9 +213,7 @@ class TimelineScreen extends ConsumerWidget {
                     : 'Tracking paused',
                 message: status == TrackingStatus.on
                     ? 'Points are being saved on this phone. Visits and trips '
-                        'will appear after segmentation (next phase). '
-                        'On Samsung, exempt the app from battery optimisation '
-                        'so tracking survives sleep.'
+                        'will appear after segmentation (next phase).'
                     : 'Tap play in the app bar to resume.',
                 actionLabel: 'Battery tip',
                 onAction: () => context.push(Routes.keepAlive),
@@ -202,11 +229,13 @@ class TimelineScreen extends ConsumerWidget {
                         'trips come in the next phase.',
                 actionLabel: 'Start tracking',
                 onAction: () async {
-                  if (!disclosureShown && snap.hasForeground && !snap.hasBackground) {
+                  if (!disclosureShown &&
+                      snap.hasForeground &&
+                      !snap.hasBackground) {
                     await context.push(Routes.onboardingBackground);
                     return;
                   }
-                  await _startTracking(ref, mode);
+                  await session.start(mode);
                 },
               )
             else
