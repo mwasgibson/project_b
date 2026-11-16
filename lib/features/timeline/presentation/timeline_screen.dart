@@ -3,17 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/db/app_database.dart';
 import '../../../core/permissions/permission_providers.dart';
 import '../../../core/permissions/permission_service.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/theme/domain_colors.dart';
 import '../../../core/widgets/content_width.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/tracking_status_chip.dart';
+import '../../../domain/timeline/timeline_entry.dart';
 import '../../../domain/tracking/location_tracker.dart';
 import '../../tracking/tracking_providers.dart';
+import 'visit_detail_sheet.dart';
 
-/// S5 — tracking controls + today's segmented visits.
+/// S5 — tracking controls + today's visits and trips.
 class TimelineScreen extends ConsumerWidget {
   const TimelineScreen({super.key});
 
@@ -35,9 +37,18 @@ class TimelineScreen extends ConsumerWidget {
     final d = Duration(milliseconds: endMs - startMs);
     if (d.inHours >= 1) {
       final m = d.inMinutes.remainder(60);
-      return m == 0 ? '${d.inHours} h' : '${d.inHours} h ${m} min';
+      return m == 0 ? '${d.inHours} h' : '${d.inHours} h $m min';
     }
+    if (d.inMinutes < 1) return '<1 min';
     return '${d.inMinutes} min';
+  }
+
+  static String _formatDistance(double? meters) {
+    if (meters == null) return '';
+    if (meters >= 1000) {
+      return '${(meters / 1000).toStringAsFixed(1)} km';
+    }
+    return '${meters.round()} m';
   }
 
   @override
@@ -50,7 +61,7 @@ class TimelineScreen extends ConsumerWidget {
     final engineStatus = ref.watch(trackingStatusProvider);
     final pointCount = ref.watch(rawPointCountProvider);
     final modeSetting = ref.watch(trackingModeSettingProvider);
-    final visitsAsync = ref.watch(todaysVisitsProvider);
+    final timelineAsync = ref.watch(todaysTimelineProvider);
 
     final snap = perm.valueOrNull;
     final disclosureShown = disclosure.valueOrNull ?? false;
@@ -64,8 +75,13 @@ class TimelineScreen extends ConsumerWidget {
     );
     final count = pointCount.valueOrNull ?? 0;
     final lastAt = session.tracker.lastPointAt;
-    final visits = visitsAsync.valueOrNull ?? const <Visit>[];
+    final entries = timelineAsync.valueOrNull ?? const <TimelineEntry>[];
+    final visitCount =
+        entries.where((e) => e.kind == TimelineEntryKind.visit).length;
+    final tripCount =
+        entries.where((e) => e.kind == TimelineEntryKind.trip).length;
     final timeFmt = DateFormat.Hm();
+    final domain = context.domainColors;
 
     return Scaffold(
       appBar: AppBar(
@@ -111,13 +127,15 @@ class TimelineScreen extends ConsumerWidget {
                 onTap: () => context.push(Routes.trackingSettings),
               ),
             ),
-            if (count > 0 || lastAt != null) ...[
+            if (count > 0 || lastAt != null || entries.isNotEmpty) ...[
               const SizedBox(height: 12),
               Text(
                 [
                   if (count > 0) '$count point${count == 1 ? '' : 's'}',
-                  if (visits.isNotEmpty)
-                    '${visits.length} visit${visits.length == 1 ? '' : 's'} today',
+                  if (visitCount > 0)
+                    '$visitCount visit${visitCount == 1 ? '' : 's'}',
+                  if (tripCount > 0)
+                    '$tripCount trip${tripCount == 1 ? '' : 's'}',
                   if (lastAt != null)
                     'Last: ${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(lastAt, isUtc: true).toLocal())}',
                 ].join(' · '),
@@ -220,33 +238,57 @@ class TimelineScreen extends ConsumerWidget {
                     .read(permissionServiceProvider)
                     .openSystemAppSettings(),
               )
-            else if (visits.isNotEmpty) ...[
+            else if (entries.isNotEmpty) ...[
               Text(
                 'Today',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              for (final v in visits)
-                Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.place_outlined,
-                      color: Theme.of(context).colorScheme.primary,
+              for (final entry in entries)
+                if (entry.kind == TimelineEntryKind.visit)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.place_outlined,
+                        color: domain.visit,
+                      ),
+                      title: const Text('Unknown place'),
+                      subtitle: Text(
+                        '${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(entry.visit!.startAt, isUtc: true).toLocal())}'
+                        ' – '
+                        '${entry.visit!.endAt == null ? 'now' : timeFmt.format(DateTime.fromMillisecondsSinceEpoch(entry.visit!.endAt!, isUtc: true).toLocal())}'
+                        ' · ${_formatDuration(entry.visit!.startAt, entry.visit!.endAt)}',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () =>
+                          VisitDetailSheet.show(context, entry.visit!),
                     ),
-                    title: const Text('Unknown place'),
-                    subtitle: Text(
-                      '${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(v.startAt, isUtc: true).toLocal())}'
-                      ' – '
-                      '${v.endAt == null ? 'now' : timeFmt.format(DateTime.fromMillisecondsSinceEpoch(v.endAt!, isUtc: true).toLocal())}'
-                      ' · ${_formatDuration(v.startAt, v.endAt)}',
-                    ),
-                    trailing: Text(
-                      '${v.pointCount ?? 0} pts',
-                      style: Theme.of(context).textTheme.labelSmall,
+                  )
+                else
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.directions_outlined,
+                        color: domain.trip,
+                      ),
+                      title: const Text('Trip'),
+                      subtitle: Text(
+                        [
+                          '${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(entry.trip!.startAt, isUtc: true).toLocal())}'
+                              ' – '
+                              '${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(entry.trip!.endAt, isUtc: true).toLocal())}',
+                          _formatDuration(
+                            entry.trip!.startAt,
+                            entry.trip!.endAt,
+                          ),
+                          if (entry.trip!.distanceM != null)
+                            _formatDistance(entry.trip!.distanceM),
+                        ].join(' · '),
+                      ),
                     ),
                   ),
-                ),
               if (status != TrackingStatus.on &&
                   status != TrackingStatus.paused)
                 TextButton(
@@ -270,7 +312,8 @@ class TimelineScreen extends ConsumerWidget {
             else if (snap != null && snap.hasForeground)
               EmptyState(
                 icon: Icons.route_outlined,
-                title: count > 0 ? 'No visits yet today' : 'Nothing recorded yet',
+                title:
+                    count > 0 ? 'No visits yet today' : 'Nothing recorded yet',
                 message: count > 0
                     ? 'You have points saved. Visits appear after ~10 minutes '
                         'in one place. Tap refresh or start tracking again.'

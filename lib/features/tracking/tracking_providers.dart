@@ -6,6 +6,7 @@ import '../../core/db/segmentation_repository.dart';
 import '../../core/permissions/permission_providers.dart';
 import '../../core/providers.dart';
 import '../../core/settings/setting_keys.dart';
+import '../../domain/timeline/timeline_entry.dart';
 import '../../domain/tracking/location_tracker.dart';
 import 'data/geolocator_location_tracker.dart';
 import 'tracking_session.dart';
@@ -52,11 +53,16 @@ final rawPointCountProvider = StreamProvider<int>((ref) {
   return ref.watch(rawPointsRepositoryProvider).watchCount();
 });
 
-/// Today's visits (local calendar day). Triggers a segmenter pass once.
+/// Today's visits + trips, ordered. Triggers a segmenter pass once.
+final todaysTimelineProvider = StreamProvider<List<TimelineEntry>>((ref) {
+  final repo = ref.watch(segmentationRepositoryProvider);
+  repo.runOnce();
+  return repo.watchTimelineForDay(DateTime.now());
+});
+
+/// Kept for call sites that only need visits.
 final todaysVisitsProvider = StreamProvider((ref) {
   final repo = ref.watch(segmentationRepositoryProvider);
-  // Best-effort: process any unprocessed points when Timeline is watched.
-  repo.runOnce();
   return repo.watchVisitsForDay(DateTime.now());
 });
 
@@ -89,5 +95,6 @@ Future<void> setTrackingModeSetting(WidgetRef ref, TrackingMode mode) async {
 
 Future<void> runSegmentation(WidgetRef ref) async {
   await ref.read(segmentationRepositoryProvider).runOnce();
+  ref.invalidate(todaysTimelineProvider);
   ref.invalidate(todaysVisitsProvider);
 }
