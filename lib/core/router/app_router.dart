@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -28,18 +29,36 @@ abstract final class Routes {
   static const keepAlive = '/help/keep-alive';
 }
 
+/// Notifier that bumps when onboarding completion changes so GoRouter
+/// re-runs redirect without destroying the navigator stack.
+class _RouterRefresh extends ChangeNotifier {
+  void ping() => notifyListeners();
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final onboarding = ref.watch(onboardingCompletedProvider);
+  final refresh = _RouterRefresh();
+  ref.onDispose(refresh.dispose);
+
+  // Only refresh when the *value* of onboarding completion changes.
+  // Do not watch here — watching rebuilds this provider and creates a new
+  // GoRouter, which resets the user to initialLocation (e.g. after theme).
+  ref.listen<AsyncValue<bool>>(onboardingCompletedProvider, (prev, next) {
+    final was = prev?.valueOrNull;
+    final now = next.valueOrNull;
+    if (was != now) refresh.ping();
+  });
 
   return GoRouter(
     initialLocation: Routes.timeline,
+    refreshListenable: refresh,
     redirect: (context, state) {
       final path = state.uri.path;
       final inOnboarding = path.startsWith('/onboarding');
 
+      final onboarding = ref.read(onboardingCompletedProvider);
       if (onboarding.isLoading) return null;
 
-      final completed = onboarding.value ?? false;
+      final completed = onboarding.valueOrNull ?? false;
 
       if (!completed && !inOnboarding) {
         return Routes.onboardingWelcome;
