@@ -1,14 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/db/gaps_repository.dart';
 import '../../core/db/raw_points_repository.dart';
 import '../../core/permissions/permission_providers.dart';
 import '../../core/providers.dart';
 import '../../core/settings/setting_keys.dart';
 import '../../domain/tracking/location_tracker.dart';
 import 'data/geolocator_location_tracker.dart';
+import 'tracking_session.dart';
 
 final rawPointsRepositoryProvider = Provider<RawPointsRepository>(
   (ref) => RawPointsRepository(ref.watch(databaseProvider)),
+);
+
+final gapsRepositoryProvider = Provider<GapsRepository>(
+  (ref) => GapsRepository(ref.watch(databaseProvider)),
 );
 
 final locationTrackerProvider = Provider<LocationTracker>((ref) {
@@ -20,9 +26,22 @@ final locationTrackerProvider = Provider<LocationTracker>((ref) {
   return tracker;
 });
 
+final trackingSessionProvider = Provider<TrackingSession>((ref) {
+  final session = TrackingSession(
+    tracker: ref.watch(locationTrackerProvider),
+    settings: ref.watch(settingsRepositoryProvider),
+    gaps: ref.watch(gapsRepositoryProvider),
+    points: ref.watch(rawPointsRepositoryProvider),
+  );
+  ref.onDispose(session.dispose);
+  // Fire-and-forget resume if the user left tracking on.
+  session.ensureStarted();
+  return session;
+});
+
 final trackingStatusProvider = StreamProvider<TrackingStatus>((ref) {
-  final tracker = ref.watch(locationTrackerProvider);
-  return tracker.status;
+  final session = ref.watch(trackingSessionProvider);
+  return session.tracker.status;
 });
 
 final rawPointCountProvider = StreamProvider<int>((ref) {
@@ -40,9 +59,18 @@ final trackingModeSettingProvider = StreamProvider<TrackingMode>((ref) {
   });
 });
 
+final autoSaverEnabledProvider = StreamProvider<bool>((ref) {
+  final repo = ref.watch(settingsRepositoryProvider);
+  return repo.watch(SettingKeys.autoSaverEnabled).map((raw) => raw != 'false');
+});
+
+final autoSaverLevelProvider = StreamProvider<int>((ref) {
+  final repo = ref.watch(settingsRepositoryProvider);
+  return repo.watch(SettingKeys.autoSaverLevel).map(
+        (raw) => int.tryParse(raw ?? '') ?? 20,
+      );
+});
+
 Future<void> setTrackingModeSetting(WidgetRef ref, TrackingMode mode) async {
-  await ref
-      .read(settingsRepositoryProvider)
-      .write(SettingKeys.trackingMode, mode.name);
-  await ref.read(locationTrackerProvider).setMode(mode);
+  await ref.read(trackingSessionProvider).setMode(mode);
 }

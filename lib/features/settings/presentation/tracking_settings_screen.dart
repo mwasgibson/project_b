@@ -9,7 +9,7 @@ import '../../../core/widgets/content_width.dart';
 import '../../../domain/tracking/location_tracker.dart';
 import '../../tracking/tracking_providers.dart';
 
-/// S14 (partial) — mode + keep-alive. Health/retention land later in Phase 3/8.
+/// S14 — mode, auto-saver, health, keep-alive.
 class TrackingSettingsScreen extends ConsumerWidget {
   const TrackingSettingsScreen({super.key});
 
@@ -21,7 +21,8 @@ class TrackingSettingsScreen extends ConsumerWidget {
 
   static String _modeSubtitle(TrackingMode mode) => switch (mode) {
         TrackingMode.high => 'More points, higher battery use (~10 m).',
-        TrackingMode.balanced => 'Default. Good accuracy, moderate battery (~25 m).',
+        TrackingMode.balanced =>
+          'Default. Good accuracy, moderate battery (~25 m).',
         TrackingMode.saver => 'Fewer updates, lightest on battery (~75 m).',
       };
 
@@ -32,6 +33,9 @@ class TrackingSettingsScreen extends ConsumerWidget {
     final status = ref.watch(trackingStatusProvider).valueOrNull ??
         TrackingStatus.off;
     final count = ref.watch(rawPointCountProvider).valueOrNull ?? 0;
+    final autoSaver = ref.watch(autoSaverEnabledProvider).valueOrNull ?? true;
+    final level = ref.watch(autoSaverLevelProvider).valueOrNull ?? 20;
+    final session = ref.watch(trackingSessionProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Tracking')),
@@ -45,25 +49,85 @@ class TrackingSettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Card(
-              child: RadioGroup<TrackingMode>(
-                groupValue: mode,
-                onChanged: (value) async {
-                  if (value == null) return;
-                  await setTrackingModeSetting(ref, value);
-                },
-                child: Column(
-                  children: [
-                    for (final m in TrackingMode.values) ...[
-                      if (m != TrackingMode.values.first)
-                        const Divider(height: 1),
-                      RadioListTile<TrackingMode>(
-                        value: m,
-                        title: Text(_modeTitle(m)),
-                        subtitle: Text(_modeSubtitle(m)),
-                      ),
-                    ],
+              child: Column(
+                children: [
+                  for (final m in TrackingMode.values) ...[
+                    if (m != TrackingMode.values.first) const Divider(height: 1),
+                    RadioListTile<TrackingMode>(
+                      value: m,
+                      groupValue: mode,
+                      title: Text(_modeTitle(m)),
+                      subtitle: Text(_modeSubtitle(m)),
+                      onChanged: (value) async {
+                        if (value == null) return;
+                        await setTrackingModeSetting(ref, value);
+                      },
+                    ),
                   ],
-                ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Auto battery saver',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    title: const Text('Switch to saver when battery is low'),
+                    subtitle: Text('Uses saver mode at or below $level%'),
+                    value: autoSaver,
+                    onChanged: (on) async {
+                      await ref
+                          .read(settingsRepositoryProvider)
+                          .write(
+                            SettingKeys.autoSaverEnabled,
+                            on ? 'true' : 'false',
+                          );
+                    },
+                  ),
+                  if (autoSaver) ...[
+                    const Divider(height: 1),
+                    ListTile(
+                      title: const Text('Threshold'),
+                      subtitle: Text('$level%'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed: level <= 5
+                                ? null
+                                : () async {
+                                    await ref
+                                        .read(settingsRepositoryProvider)
+                                        .write(
+                                          SettingKeys.autoSaverLevel,
+                                          '${level - 5}',
+                                        );
+                                  },
+                            icon: const Icon(Icons.remove),
+                          ),
+                          IconButton(
+                            onPressed: level >= 50
+                                ? null
+                                : () async {
+                                    await ref
+                                        .read(settingsRepositoryProvider)
+                                        .write(
+                                          SettingKeys.autoSaverLevel,
+                                          '${level + 5}',
+                                        );
+                                  },
+                            icon: const Icon(Icons.add),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             const SizedBox(height: 24),
@@ -85,6 +149,21 @@ class TrackingSettingsScreen extends ConsumerWidget {
                     subtitle: Text('$count'),
                   ),
                   const Divider(height: 1),
+                  FutureBuilder<String?>(
+                    future: session.healthLabel(),
+                    builder: (context, snap) {
+                      return ListTile(
+                        title: const Text('Health'),
+                        subtitle: Text(
+                          snap.data ??
+                              (status == TrackingStatus.on
+                                  ? 'Waiting for first point…'
+                                  : 'Not tracking'),
+                        ),
+                      );
+                    },
+                  ),
+                  const Divider(height: 1),
                   ListTile(
                     title: const Text('Samsung / battery tip'),
                     subtitle: const Text(
@@ -100,10 +179,7 @@ class TrackingSettingsScreen extends ConsumerWidget {
             if (status == TrackingStatus.on || status == TrackingStatus.paused)
               OutlinedButton(
                 onPressed: () async {
-                  await ref.read(locationTrackerProvider).stop();
-                  await ref
-                      .read(settingsRepositoryProvider)
-                      .write(SettingKeys.trackingEnabled, 'false');
+                  await ref.read(trackingSessionProvider).stop();
                 },
                 child: const Text('Stop tracking'),
               ),
