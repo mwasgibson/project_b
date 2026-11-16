@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:battery_plus/battery_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../../core/db/raw_points_repository.dart';
@@ -9,9 +11,9 @@ import '../../../domain/tracking/location_tracker.dart';
 
 /// Free geolocator-based tracker for personal Android use.
 ///
-/// Writes [raw_points] while the process is alive. Surviving aggressive OEM
-/// kills (Samsung) still needs a foreground service / keep-alive (S22) and
-/// may later swap to flutter_background_geolocation behind this same interface.
+/// On Android, starts a location-type foreground service with a persistent
+/// notification so updates continue after Home. Surviving a full swipe-kill
+/// still needs a separate headless engine (later) or Transistorsoft.
 class GeolocatorLocationTracker implements LocationTracker {
   GeolocatorLocationTracker({
     required RawPointsRepository points,
@@ -32,7 +34,10 @@ class GeolocatorLocationTracker implements LocationTracker {
   bool _wantTracking = false;
 
   @override
-  Stream<TrackingStatus> get status => _statusController.stream;
+  Stream<TrackingStatus> get status async* {
+    yield _status;
+    yield* _statusController.stream;
+  }
 
   @override
   TrackingStatus get currentStatus => _status;
@@ -50,24 +55,42 @@ class GeolocatorLocationTracker implements LocationTracker {
   }
 
   LocationSettings _settingsFor(TrackingMode mode) {
-    // distanceFilter in metres; time limits left to the platform.
-    switch (mode) {
-      case TrackingMode.high:
-        return const LocationSettings(
-          accuracy: LocationAccuracy.best,
-          distanceFilter: 10,
-        );
-      case TrackingMode.balanced:
-        return const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 25,
-        );
-      case TrackingMode.saver:
-        return const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          distanceFilter: 75,
-        );
+    final accuracy = switch (mode) {
+      TrackingMode.high => LocationAccuracy.best,
+      TrackingMode.balanced => LocationAccuracy.high,
+      TrackingMode.saver => LocationAccuracy.medium,
+    };
+    final distanceFilter = switch (mode) {
+      TrackingMode.high => 10,
+      TrackingMode.balanced => 25,
+      TrackingMode.saver => 75,
+    };
+
+    // Android: foreground service + notification keeps sampling after Home.
+    if (!kIsWeb && Platform.isAndroid) {
+      return AndroidSettings(
+        accuracy: accuracy,
+        distanceFilter: distanceFilter,
+        intervalDuration: switch (mode) {
+          TrackingMode.high => const Duration(seconds: 5),
+          TrackingMode.balanced => const Duration(seconds: 15),
+          TrackingMode.saver => const Duration(seconds: 45),
+        },
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationTitle: 'Project B is tracking',
+          notificationText:
+              'Recording where you go. Data stays on this phone.',
+          notificationChannelName: 'Location tracking',
+          setOngoing: true,
+          enableWakeLock: true,
+        ),
+      );
     }
+
+    return LocationSettings(
+      accuracy: accuracy,
+      distanceFilter: distanceFilter,
+    );
   }
 
   Future<TrackingStatus> _permissionStatus() async {
@@ -100,9 +123,11 @@ class GeolocatorLocationTracker implements LocationTracker {
       _onPosition,
       onError: (_) async {
         final blocked = await _permissionStatus();
-        _emit(blocked == TrackingStatus.off
-            ? TrackingStatus.needsPermission
-            : blocked);
+        _emit(
+          blocked == TrackingStatus.off
+              ? TrackingStatus.needsPermission
+              : blocked,
+        );
       },
     );
   }

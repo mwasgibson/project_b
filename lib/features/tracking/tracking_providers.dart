@@ -16,10 +16,7 @@ final locationTrackerProvider = Provider<LocationTracker>((ref) {
     points: ref.watch(rawPointsRepositoryProvider),
     permissions: ref.watch(permissionServiceProvider),
   );
-  ref.onDispose(() {
-    // ignore: avoid_dynamic_calls
-    (tracker).dispose();
-  });
+  ref.onDispose(tracker.dispose);
   return tracker;
 });
 
