@@ -2,7 +2,8 @@
 
 ## Unreleased
 ### Added
-- Phase 3 (start): GeolocatorLocationTracker writes `raw_points`; pause/resume; battery modes.
+- Phase 3: GeolocatorLocationTracker writes `raw_points`; pause/resume; battery modes.
+- Android foreground notification ("Project B is tracking") so sampling continues after Home.
 - RawPointsRepository; Timeline point count and last sample time.
 - Tracking settings (S14 partial) and Samsung keep-alive guide (S22).
 - Phase 2 onboarding: welcome disclosure (S1), foreground location (S2), background disclosure (S3).
