@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/permissions/permission_providers.dart';
 import '../../../core/router/app_router.dart';
@@ -40,7 +41,7 @@ class _BackgroundPermissionScreenState
 
     if (!mounted) return;
 
-    if (!bg.isGranted) {
+    if (bg != PermissionStatus.granted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
