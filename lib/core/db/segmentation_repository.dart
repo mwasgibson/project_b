@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../domain/segmentation/segmenter.dart';
+import '../../domain/timeline/timeline_entry.dart';
 import 'app_database.dart';
 
 class SegmentationRepository {
@@ -86,10 +87,7 @@ class SegmentationRepository {
   }
 
   Stream<List<Visit>> watchVisitsForDay(DateTime localDay) {
-    final start = DateTime(localDay.year, localDay.month, localDay.day);
-    final end = start.add(const Duration(days: 1));
-    final startMs = start.toUtc().millisecondsSinceEpoch;
-    final endMs = end.toUtc().millisecondsSinceEpoch;
+    final (startMs, endMs) = _dayBounds(localDay);
 
     return (_db.select(_db.visits)
           ..where(
@@ -102,11 +100,92 @@ class SegmentationRepository {
         .watch();
   }
 
+  Stream<List<Trip>> watchTripsForDay(DateTime localDay) {
+    final (startMs, endMs) = _dayBounds(localDay);
+
+    return (_db.select(_db.trips)
+          ..where(
+            (t) =>
+                t.deleted.equals(false) &
+                t.startAt.isBiggerOrEqualValue(startMs) &
+                t.startAt.isSmallerThanValue(endMs),
+          )
+          ..orderBy([(t) => OrderingTerm.asc(t.startAt)]))
+        .watch();
+  }
+
+  /// Visits and trips for a local day, ordered by start time.
+  Stream<List<TimelineEntry>> watchTimelineForDay(DateTime localDay) {
+    // Combine two streams; rebuild when either changes.
+    return watchVisitsForDay(localDay).asyncExpand((visits) {
+      return watchTripsForDay(localDay).map((trips) {
+        final entries = <TimelineEntry>[
+          for (final v in visits) TimelineEntry.visit(v),
+          for (final t in trips) TimelineEntry.trip(t),
+        ]..sort((a, b) => a.sortAt.compareTo(b.sortAt));
+        return entries;
+      });
+    });
+  }
+
+  Future<Visit?> getVisit(String id) async {
+    final query = _db.select(_db.visits)
+      ..where((t) => t.id.equals(id) & t.deleted.equals(false));
+    return query.getSingleOrNull();
+  }
+
+  Future<void> softDeleteVisit(String id) async {
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+    await (_db.update(_db.visits)..where((t) => t.id.equals(id))).write(
+          VisitsCompanion(
+            deleted: const Value(true),
+            updatedAt: Value(now),
+          ),
+        );
+    // Soft-delete trips that referenced this visit.
+    await (_db.update(_db.trips)
+          ..where(
+            (t) =>
+                t.fromVisitId.equals(id) | t.toVisitId.equals(id),
+          ))
+        .write(
+      TripsCompanion(
+        deleted: const Value(true),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  Future<void> adjustVisitTimes({
+    required String id,
+    required int startAt,
+    int? endAt,
+  }) async {
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+    await (_db.update(_db.visits)..where((t) => t.id.equals(id))).write(
+          VisitsCompanion(
+            startAt: Value(startAt),
+            endAt: Value(endAt),
+            userEdited: const Value(true),
+            updatedAt: Value(now),
+          ),
+        );
+  }
+
   Stream<int> watchVisitCount() {
     final count = _db.visits.id.count();
     final query = _db.selectOnly(_db.visits)
       ..addColumns([count])
       ..where(_db.visits.deleted.equals(false));
     return query.watchSingle().map((row) => row.read(count) ?? 0);
+  }
+
+  (int, int) _dayBounds(DateTime localDay) {
+    final start = DateTime(localDay.year, localDay.month, localDay.day);
+    final end = start.add(const Duration(days: 1));
+    return (
+      start.toUtc().millisecondsSinceEpoch,
+      end.toUtc().millisecondsSinceEpoch,
+    );
   }
 }
