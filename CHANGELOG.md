@@ -2,10 +2,8 @@
 
 ## Unreleased
 ### Added
-- Phase 5: `PlaceResolver` interface; `PlatformPlaceResolver` (OS geocoder).
-- PlacesRepository with haversine radius match; PlaceLabelService queue.
-- Auto-label toggle in Tracking settings (privacy disclosure).
-- Timeline and visit detail show place names; retry label.
+- Phase 5: user rename place from visit detail (`name_source = user`).
+- PlaceResolver + PlatformPlaceResolver; radius match; label queue; auto-label toggle.
 - Phase 4: segmenter, visits/trips, visit detail delete.
 - Phase 3: tracking engine, FGS, gaps, auto-saver, health.
 

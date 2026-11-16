@@ -116,7 +116,6 @@ class SegmentationRepository {
 
   /// Visits and trips for a local day, ordered by start time.
   Stream<List<TimelineEntry>> watchTimelineForDay(DateTime localDay) {
-    // Combine two streams; rebuild when either changes.
     return watchVisitsForDay(localDay).asyncExpand((visits) {
       return watchTripsForDay(localDay).map((trips) {
         final entries = <TimelineEntry>[
@@ -134,6 +133,22 @@ class SegmentationRepository {
     return query.getSingleOrNull();
   }
 
+  /// Attach a place to a visit and protect it from auto-relabel.
+  Future<void> attachPlace({
+    required String visitId,
+    required String placeId,
+  }) async {
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+    await (_db.update(_db.visits)..where((t) => t.id.equals(visitId))).write(
+          VisitsCompanion(
+            placeId: Value(placeId),
+            labelState: const Value('done'),
+            userEdited: const Value(true),
+            updatedAt: Value(now),
+          ),
+        );
+  }
+
   Future<void> softDeleteVisit(String id) async {
     final now = DateTime.now().toUtc().millisecondsSinceEpoch;
     await (_db.update(_db.visits)..where((t) => t.id.equals(id))).write(
@@ -142,11 +157,9 @@ class SegmentationRepository {
             updatedAt: Value(now),
           ),
         );
-    // Soft-delete trips that referenced this visit.
     await (_db.update(_db.trips)
           ..where(
-            (t) =>
-                t.fromVisitId.equals(id) | t.toVisitId.equals(id),
+            (t) => t.fromVisitId.equals(id) | t.toVisitId.equals(id),
           ))
         .write(
       TripsCompanion(

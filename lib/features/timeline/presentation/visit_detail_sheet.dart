@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/db/app_database.dart';
 import '../../tracking/tracking_providers.dart';
 
-/// S7 — visit detail (docs/03).
+/// S7 — visit detail: rename place, retry label, delete.
 class VisitDetailSheet extends ConsumerWidget {
   const VisitDetailSheet({
     super.key,
@@ -40,6 +40,56 @@ class VisitDetailSheet extends ConsumerWidget {
     );
   }
 
+  Future<void> _rename(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController(
+      text: place?.name?.trim() ?? '',
+    );
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Rename place'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              hintText: 'e.g. Home, Java House',
+              labelText: 'Name',
+            ),
+            onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    if (name == null || name.isEmpty || !context.mounted) return;
+
+    final placeRow = await ref.read(placesRepositoryProvider).ensureUserNamedPlace(
+          name: name,
+          lat: visit.lat,
+          lng: visit.lng,
+          existingPlaceId: place?.id ?? visit.placeId,
+        );
+    await ref.read(segmentationRepositoryProvider).attachPlace(
+          visitId: visit.id,
+          placeId: placeRow.id,
+        );
+    ref.invalidate(todaysTimelineProvider);
+    ref.invalidate(placesByIdProvider);
+    if (context.mounted) Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -61,6 +111,8 @@ class VisitDetailSheet extends ConsumerWidget {
             _ => 'Unknown place',
           };
 
+    final isUserNamed = place?.nameSource == 'user';
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -68,13 +120,40 @@ class VisitDetailSheet extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              title,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (isUserNamed) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Named by you',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Rename',
+                  onPressed: () => _rename(context, ref),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+              ],
             ),
-            if (place?.address != null && place!.address!.trim().isNotEmpty) ...[
+            if (place?.address != null &&
+                place!.address!.trim().isNotEmpty) ...[
               const SizedBox(height: 4),
               Text(
                 place!.address!,
@@ -123,7 +202,13 @@ class VisitDetailSheet extends ConsumerWidget {
               value: '${visit.pointCount ?? 0}',
             ),
             const SizedBox(height: 16),
-            if (visit.labelState == 'pending' || visit.labelState == 'failed')
+            FilledButton.tonalIcon(
+              onPressed: () => _rename(context, ref),
+              icon: const Icon(Icons.edit_outlined),
+              label: Text(place == null ? 'Name this place' : 'Rename place'),
+            ),
+            const SizedBox(height: 8),
+            if (visit.labelState == 'pending' || visit.labelState == 'failed') ...[
               OutlinedButton.icon(
                 onPressed: () async {
                   await ref
@@ -134,10 +219,10 @@ class VisitDetailSheet extends ConsumerWidget {
                   if (context.mounted) Navigator.pop(context);
                 },
                 icon: const Icon(Icons.refresh),
-                label: const Text('Retry label'),
+                label: const Text('Retry auto-label'),
               ),
-            if (visit.labelState == 'pending' || visit.labelState == 'failed')
               const SizedBox(height: 8),
+            ],
             OutlinedButton.icon(
               onPressed: () async {
                 final ok = await showDialog<bool>(
