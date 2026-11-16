@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/db/app_database.dart';
 import '../../../core/permissions/permission_providers.dart';
 import '../../../core/permissions/permission_service.dart';
 import '../../../core/router/app_router.dart';
@@ -51,6 +52,20 @@ class TimelineScreen extends ConsumerWidget {
     return '${meters.round()} m';
   }
 
+  static String _visitTitle(Visit v, Map<String, Place> places) {
+    final id = v.placeId;
+    if (id != null) {
+      final name = places[id]?.name?.trim();
+      if (name != null && name.isNotEmpty) return name;
+    }
+    return switch (v.labelState) {
+      'pending' => 'Labelling…',
+      'failed' => 'Unknown place',
+      'disabled' => 'Unlabelled place',
+      _ => 'Unknown place',
+    };
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(trackingSessionProvider);
@@ -62,6 +77,7 @@ class TimelineScreen extends ConsumerWidget {
     final pointCount = ref.watch(rawPointCountProvider);
     final modeSetting = ref.watch(trackingModeSettingProvider);
     final timelineAsync = ref.watch(todaysTimelineProvider);
+    final placesMap = ref.watch(placesByIdProvider).valueOrNull ?? {};
 
     final snap = perm.valueOrNull;
     final disclosureShown = disclosure.valueOrNull ?? false;
@@ -253,7 +269,7 @@ class TimelineScreen extends ConsumerWidget {
                         Icons.place_outlined,
                         color: domain.visit,
                       ),
-                      title: const Text('Unknown place'),
+                      title: Text(_visitTitle(entry.visit!, placesMap)),
                       subtitle: Text(
                         '${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(entry.visit!.startAt, isUtc: true).toLocal())}'
                         ' – '
@@ -261,8 +277,13 @@ class TimelineScreen extends ConsumerWidget {
                         ' · ${_formatDuration(entry.visit!.startAt, entry.visit!.endAt)}',
                       ),
                       trailing: const Icon(Icons.chevron_right),
-                      onTap: () =>
-                          VisitDetailSheet.show(context, entry.visit!),
+                      onTap: () => VisitDetailSheet.show(
+                        context,
+                        entry.visit!,
+                        place: entry.visit!.placeId == null
+                            ? null
+                            : placesMap[entry.visit!.placeId!],
+                      ),
                     ),
                   )
                 else

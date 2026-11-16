@@ -9,7 +9,7 @@ import '../../../core/widgets/content_width.dart';
 import '../../../domain/tracking/location_tracker.dart';
 import '../../tracking/tracking_providers.dart';
 
-/// S14 — mode, auto-saver, health, keep-alive.
+/// S14 — mode, auto-saver, auto-label, health, keep-alive.
 class TrackingSettingsScreen extends ConsumerWidget {
   const TrackingSettingsScreen({super.key});
 
@@ -35,6 +35,7 @@ class TrackingSettingsScreen extends ConsumerWidget {
     final count = ref.watch(rawPointCountProvider).valueOrNull ?? 0;
     final autoSaver = ref.watch(autoSaverEnabledProvider).valueOrNull ?? true;
     final level = ref.watch(autoSaverLevelProvider).valueOrNull ?? 20;
+    final autoLabel = ref.watch(autoLabelEnabledProvider).valueOrNull ?? true;
     final session = ref.watch(trackingSessionProvider);
 
     return Scaffold(
@@ -48,26 +49,23 @@ class TrackingSettingsScreen extends ConsumerWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            RadioGroup<TrackingMode>(
-              groupValue: mode,
-              onChanged: (value) async {
-                if (value == null) return;
-                await setTrackingModeSetting(ref, value);
-              },
-              child: Card(
-                child: Column(
-                  children: [
-                    for (final m in TrackingMode.values) ...[
-                      if (m != TrackingMode.values.first)
-                        const Divider(height: 1),
-                      RadioListTile<TrackingMode>(
-                        value: m,
-                        title: Text(_modeTitle(m)),
-                        subtitle: Text(_modeSubtitle(m)),
-                      ),
-                    ],
+            Card(
+              child: Column(
+                children: [
+                  for (final m in TrackingMode.values) ...[
+                    if (m != TrackingMode.values.first) const Divider(height: 1),
+                    RadioListTile<TrackingMode>(
+                      value: m,
+                      groupValue: mode,
+                      title: Text(_modeTitle(m)),
+                      subtitle: Text(_modeSubtitle(m)),
+                      onChanged: (value) async {
+                        if (value == null) return;
+                        await setTrackingModeSetting(ref, value);
+                      },
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
             const SizedBox(height: 24),
@@ -84,9 +82,7 @@ class TrackingSettingsScreen extends ConsumerWidget {
                     subtitle: Text('Uses saver mode at or below $level%'),
                     value: autoSaver,
                     onChanged: (on) async {
-                      await ref
-                          .read(settingsRepositoryProvider)
-                          .write(
+                      await ref.read(settingsRepositoryProvider).write(
                             SettingKeys.autoSaverEnabled,
                             on ? 'true' : 'false',
                           );
@@ -131,6 +127,33 @@ class TrackingSettingsScreen extends ConsumerWidget {
                     ),
                   ],
                 ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Place names',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: SwitchListTile(
+                title: const Text('Auto-label visits'),
+                subtitle: const Text(
+                  'Uses the phone’s place service. Coordinates may be sent to '
+                  'the platform vendor. Turn off to keep visits unlabelled.',
+                ),
+                value: autoLabel,
+                onChanged: (on) async {
+                  await ref.read(settingsRepositoryProvider).write(
+                        SettingKeys.autoLabelEnabled,
+                        on ? 'true' : 'false',
+                      );
+                  if (on) {
+                    await ref.read(placeLabelServiceProvider).processPending();
+                    ref.invalidate(todaysTimelineProvider);
+                    ref.invalidate(placesByIdProvider);
+                  }
+                },
               ),
             ),
             const SizedBox(height: 24),

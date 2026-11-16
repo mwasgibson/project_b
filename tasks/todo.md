@@ -1,24 +1,18 @@
 # Todo
 
-## Phase 0–3 — done (core)
-Samsung smoke test OK. FGS notification, gaps, auto-saver, resume on start.
+## Phase 0–4 — done (core)
+Tracking, segmenter, timeline visits/trips, visit detail.
 
-### Bugfix
-- [x] Settings change (theme) no longer resets navigation (stable GoRouter)
+## Phase 5: Place labelling (in progress)
+- [x] PlaceResolver interface + ResolvedPlace
+- [x] PlatformPlaceResolver (OS geocoder via `geocoding`)
+- [x] PlacesRepository + haversine radius match
+- [x] PlaceLabelService (pending queue, label_state)
+- [x] Timeline + detail show names; retry; auto-label toggle + disclosure
+- [ ] User rename place (name_source = user)
+- [ ] Optional offline city fallback
 
-## Phase 4: Segmentation (in progress)
-- [x] Segmenter pure logic (100 m / 10 min) + unit tests
-- [x] SegmentationRepository persists visits/trips, marks points processed
-- [x] Timeline lists today's visits + refresh
-- [x] Trip rows interleaved on timeline
-- [x] Visit detail sheet (times, coords, delete)
-- [ ] Tune thresholds against real Samsung data
-- [ ] Map preview (optional later)
-
-## Phase 5 next
-- Place labelling (geocoder) → real names instead of "Unknown place"
-
-## Still optional in Phase 3
+## Still optional
 - [ ] Swipe-from-recents headless engine
 - [ ] Boot restart
-- [ ] Multi-day battery log
+- [ ] Map preview

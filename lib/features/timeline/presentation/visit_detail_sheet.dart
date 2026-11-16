@@ -5,11 +5,16 @@ import 'package:intl/intl.dart';
 import '../../../core/db/app_database.dart';
 import '../../tracking/tracking_providers.dart';
 
-/// S7 — visit detail (docs/03). Rename lands with Phase 5 labelling.
+/// S7 — visit detail (docs/03).
 class VisitDetailSheet extends ConsumerWidget {
-  const VisitDetailSheet({super.key, required this.visit});
+  const VisitDetailSheet({
+    super.key,
+    required this.visit,
+    this.place,
+  });
 
   final Visit visit;
+  final Place? place;
 
   static String _duration(int startMs, int? endMs) {
     if (endMs == null) return 'Ongoing';
@@ -22,12 +27,16 @@ class VisitDetailSheet extends ConsumerWidget {
     return '${d.inMinutes} min';
   }
 
-  static Future<void> show(BuildContext context, Visit visit) {
+  static Future<void> show(
+    BuildContext context,
+    Visit visit, {
+    Place? place,
+  }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => VisitDetailSheet(visit: visit),
+      builder: (context) => VisitDetailSheet(visit: visit, place: place),
     );
   }
 
@@ -44,6 +53,14 @@ class VisitDetailSheet extends ConsumerWidget {
         : DateTime.fromMillisecondsSinceEpoch(visit.endAt!, isUtc: true)
             .toLocal();
 
+    final title = place?.name?.trim().isNotEmpty == true
+        ? place!.name!.trim()
+        : switch (visit.labelState) {
+            'pending' => 'Labelling…',
+            'disabled' => 'Unlabelled place',
+            _ => 'Unknown place',
+          };
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -52,18 +69,36 @@ class VisitDetailSheet extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Unknown place',
+              title,
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Names arrive when place labelling is on (next phase).',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            if (place?.address != null && place!.address!.trim().isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                place!.address!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
-            ),
+            ] else if (visit.labelState == 'pending') ...[
+              const SizedBox(height: 4),
+              Text(
+                'Looking up a name via the phone’s place service…',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ] else if (visit.labelState == 'disabled') ...[
+              const SizedBox(height: 4),
+              Text(
+                'Auto-labelling is off. Turn it on in Tracking settings.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             _Row(
               icon: Icons.schedule_outlined,
@@ -88,6 +123,21 @@ class VisitDetailSheet extends ConsumerWidget {
               value: '${visit.pointCount ?? 0}',
             ),
             const SizedBox(height: 16),
+            if (visit.labelState == 'pending' || visit.labelState == 'failed')
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await ref
+                      .read(placeLabelServiceProvider)
+                      .relabelVisit(visit.id);
+                  ref.invalidate(todaysTimelineProvider);
+                  ref.invalidate(placesByIdProvider);
+                  if (context.mounted) Navigator.pop(context);
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry label'),
+              ),
+            if (visit.labelState == 'pending' || visit.labelState == 'failed')
+              const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () async {
                 final ok = await showDialog<bool>(

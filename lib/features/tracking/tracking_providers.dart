@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/db/app_database.dart';
 import '../../core/db/gaps_repository.dart';
 import '../../core/db/places_repository.dart';
 import '../../core/db/raw_points_repository.dart';
@@ -75,8 +76,7 @@ final rawPointCountProvider = StreamProvider<int>((ref) {
   return ref.watch(rawPointsRepositoryProvider).watchCount();
 });
 
-/// Map of placeId → Place for today's labelled visits.
-final placesByIdProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+final placesByIdProvider = FutureProvider<Map<String, Place>>((ref) async {
   final places = await ref.watch(placesRepositoryProvider).allActive();
   return {for (final p in places) p.id: p};
 });
