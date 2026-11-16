@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/gaps_repository.dart';
 import '../../core/db/raw_points_repository.dart';
+import '../../core/db/segmentation_repository.dart';
 import '../../core/permissions/permission_providers.dart';
 import '../../core/providers.dart';
 import '../../core/settings/setting_keys.dart';
@@ -15,6 +16,10 @@ final rawPointsRepositoryProvider = Provider<RawPointsRepository>(
 
 final gapsRepositoryProvider = Provider<GapsRepository>(
   (ref) => GapsRepository(ref.watch(databaseProvider)),
+);
+
+final segmentationRepositoryProvider = Provider<SegmentationRepository>(
+  (ref) => SegmentationRepository(ref.watch(databaseProvider)),
 );
 
 final locationTrackerProvider = Provider<LocationTracker>((ref) {
@@ -34,7 +39,6 @@ final trackingSessionProvider = Provider<TrackingSession>((ref) {
     points: ref.watch(rawPointsRepositoryProvider),
   );
   ref.onDispose(session.dispose);
-  // Fire-and-forget resume if the user left tracking on.
   session.ensureStarted();
   return session;
 });
@@ -46,6 +50,14 @@ final trackingStatusProvider = StreamProvider<TrackingStatus>((ref) {
 
 final rawPointCountProvider = StreamProvider<int>((ref) {
   return ref.watch(rawPointsRepositoryProvider).watchCount();
+});
+
+/// Today's visits (local calendar day). Triggers a segmenter pass once.
+final todaysVisitsProvider = StreamProvider((ref) {
+  final repo = ref.watch(segmentationRepositoryProvider);
+  // Best-effort: process any unprocessed points when Timeline is watched.
+  repo.runOnce();
+  return repo.watchVisitsForDay(DateTime.now());
 });
 
 final trackingModeSettingProvider = StreamProvider<TrackingMode>((ref) {
@@ -73,4 +85,9 @@ final autoSaverLevelProvider = StreamProvider<int>((ref) {
 
 Future<void> setTrackingModeSetting(WidgetRef ref, TrackingMode mode) async {
   await ref.read(trackingSessionProvider).setMode(mode);
+}
+
+Future<void> runSegmentation(WidgetRef ref) async {
+  await ref.read(segmentationRepositoryProvider).runOnce();
+  ref.invalidate(todaysVisitsProvider);
 }

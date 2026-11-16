@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/db/app_database.dart';
 import '../../../core/permissions/permission_providers.dart';
 import '../../../core/permissions/permission_service.dart';
 import '../../../core/router/app_router.dart';
@@ -12,7 +13,7 @@ import '../../../core/widgets/tracking_status_chip.dart';
 import '../../../domain/tracking/location_tracker.dart';
 import '../../tracking/tracking_providers.dart';
 
-/// S5. Phase 3: live tracking status, pause/resume, point count, health.
+/// S5 — tracking controls + today's segmented visits.
 class TimelineScreen extends ConsumerWidget {
   const TimelineScreen({super.key});
 
@@ -29,9 +30,18 @@ class TimelineScreen extends ConsumerWidget {
     return TrackingStatus.off;
   }
 
+  static String _formatDuration(int startMs, int? endMs) {
+    if (endMs == null) return 'ongoing';
+    final d = Duration(milliseconds: endMs - startMs);
+    if (d.inHours >= 1) {
+      final m = d.inMinutes.remainder(60);
+      return m == 0 ? '${d.inHours} h' : '${d.inHours} h ${m} min';
+    }
+    return '${d.inMinutes} min';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Ensure session is created (resumes tracking if left on).
     final session = ref.watch(trackingSessionProvider);
 
     final perm = ref.watch(locationPermissionProvider);
@@ -40,6 +50,7 @@ class TimelineScreen extends ConsumerWidget {
     final engineStatus = ref.watch(trackingStatusProvider);
     final pointCount = ref.watch(rawPointCountProvider);
     final modeSetting = ref.watch(trackingModeSettingProvider);
+    final visitsAsync = ref.watch(todaysVisitsProvider);
 
     final snap = perm.valueOrNull;
     final disclosureShown = disclosure.valueOrNull ?? false;
@@ -53,11 +64,18 @@ class TimelineScreen extends ConsumerWidget {
     );
     final count = pointCount.valueOrNull ?? 0;
     final lastAt = session.tracker.lastPointAt;
+    final visits = visitsAsync.valueOrNull ?? const <Visit>[];
+    final timeFmt = DateFormat.Hm();
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Timeline'),
         actions: [
+          IconButton(
+            tooltip: 'Refresh visits',
+            icon: const Icon(Icons.refresh),
+            onPressed: () => runSegmentation(ref),
+          ),
           if (status == TrackingStatus.on || status == TrackingStatus.paused)
             IconButton(
               tooltip: status == TrackingStatus.on ? 'Pause' : 'Resume',
@@ -97,9 +115,11 @@ class TimelineScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               Text(
                 [
-                  if (count > 0) '$count point${count == 1 ? '' : 's'} recorded',
+                  if (count > 0) '$count point${count == 1 ? '' : 's'}',
+                  if (visits.isNotEmpty)
+                    '${visits.length} visit${visits.length == 1 ? '' : 's'} today',
                   if (lastAt != null)
-                    'Last: ${DateFormat.Hm().format(DateTime.fromMillisecondsSinceEpoch(lastAt, isUtc: true).toLocal())}',
+                    'Last: ${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(lastAt, isUtc: true).toLocal())}',
                 ].join(' · '),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -129,8 +149,7 @@ class TimelineScreen extends ConsumerWidget {
                           ),
                         ),
                         subtitle: Text(
-                          'Tracking may be blocked by battery optimisation. '
-                          'Open the battery tip and set Unrestricted.',
+                          'Tracking may be blocked by battery optimisation.',
                           style: TextStyle(
                             color:
                                 Theme.of(context).colorScheme.onErrorContainer,
@@ -157,8 +176,7 @@ class TimelineScreen extends ConsumerWidget {
               _PermissionCard(
                 title: 'Location permission needed',
                 message:
-                    'Project B needs location access to build your timeline. '
-                    'You can still use calendar and weather without it.',
+                    'Project B needs location access to build your timeline.',
                 actionLabel: snap.foregroundPermanentlyDenied
                     ? 'Open settings'
                     : 'Allow location',
@@ -182,8 +200,7 @@ class TimelineScreen extends ConsumerWidget {
               _PermissionCard(
                 title: 'Start tracking',
                 message:
-                    'Turn on background location so places and trips appear '
-                    'here automatically, even when the app is closed.',
+                    'Turn on background location so places and trips appear automatically.',
                 actionLabel: 'Start tracking',
                 onAction: () => context.push(Routes.onboardingBackground),
               )
@@ -197,14 +214,46 @@ class TimelineScreen extends ConsumerWidget {
                 title: 'Allow all the time',
                 message:
                     'For tracking with the app closed, set location to '
-                    '"Allow all the time" in system settings. You can still '
-                    'record while the app is open.',
+                    '"Allow all the time" in system settings.',
                 actionLabel: 'Open settings',
                 onAction: () => ref
                     .read(permissionServiceProvider)
                     .openSystemAppSettings(),
               )
-            else if (status == TrackingStatus.on ||
+            else if (visits.isNotEmpty) ...[
+              Text(
+                'Today',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              for (final v in visits)
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: Icon(
+                      Icons.place_outlined,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    title: const Text('Unknown place'),
+                    subtitle: Text(
+                      '${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(v.startAt, isUtc: true).toLocal())}'
+                      ' – '
+                      '${v.endAt == null ? 'now' : timeFmt.format(DateTime.fromMillisecondsSinceEpoch(v.endAt!, isUtc: true).toLocal())}'
+                      ' · ${_formatDuration(v.startAt, v.endAt)}',
+                    ),
+                    trailing: Text(
+                      '${v.pointCount ?? 0} pts',
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ),
+                ),
+              if (status != TrackingStatus.on &&
+                  status != TrackingStatus.paused)
+                TextButton(
+                  onPressed: () => session.start(mode),
+                  child: const Text('Start tracking'),
+                ),
+            ] else if (status == TrackingStatus.on ||
                 status == TrackingStatus.paused)
               EmptyState(
                 icon: Icons.route_outlined,
@@ -212,23 +261,26 @@ class TimelineScreen extends ConsumerWidget {
                     ? 'Recording'
                     : 'Tracking paused',
                 message: status == TrackingStatus.on
-                    ? 'Points are being saved on this phone. Visits and trips '
-                        'will appear after segmentation (next phase).'
+                    ? 'Stay in one place for about 10 minutes to form a visit, '
+                        'or pull refresh after you have moved around.'
                     : 'Tap play in the app bar to resume.',
-                actionLabel: 'Battery tip',
-                onAction: () => context.push(Routes.keepAlive),
+                actionLabel: 'Find visits',
+                onAction: () => runSegmentation(ref),
               )
             else if (snap != null && snap.hasForeground)
               EmptyState(
                 icon: Icons.route_outlined,
-                title: count > 0 ? 'Tracking is off' : 'Nothing recorded yet',
+                title: count > 0 ? 'No visits yet today' : 'Nothing recorded yet',
                 message: count > 0
-                    ? 'You have $count saved point${count == 1 ? '' : 's'}. '
-                        'Start tracking again to continue.'
-                    : 'When tracking is on, points are saved here. Visits and '
-                        'trips come in the next phase.',
-                actionLabel: 'Start tracking',
+                    ? 'You have points saved. Visits appear after ~10 minutes '
+                        'in one place. Tap refresh or start tracking again.'
+                    : 'When tracking is on, places you stay become visits here.',
+                actionLabel: count > 0 ? 'Find visits' : 'Start tracking',
                 onAction: () async {
+                  if (count > 0) {
+                    await runSegmentation(ref);
+                    return;
+                  }
                   if (!disclosureShown &&
                       snap.hasForeground &&
                       !snap.hasBackground) {
@@ -243,8 +295,7 @@ class TimelineScreen extends ConsumerWidget {
                 icon: Icons.route_outlined,
                 title: 'Nothing recorded yet',
                 message:
-                    'When tracking is on, the places you visit and the trips '
-                    'between them appear here.',
+                    'When tracking is on, the places you visit appear here.',
               ),
           ],
         ),
