@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
 import 'app_database.dart';
@@ -30,15 +31,15 @@ class GapsRepository {
     _openReason = null;
     if (start == null || reason == null) return;
 
-    final end = DateTime.now().toUtc().millisecondsSinceEpoch;
-    if (end - start < minDuration.inMilliseconds) return;
+    final endAt = DateTime.now().toUtc().millisecondsSinceEpoch;
+    if (endAt - start < minDuration.inMilliseconds) return;
 
     await _db.into(_db.gaps).insert(
           GapsCompanion.insert(
             id: _uuid.v4(),
             startAt: start,
-            endAt: end,
-            reason: reason.name,
+            endAt: endAt,
+            reason: Value(reason.name),
           ),
         );
   }
