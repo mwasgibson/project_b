@@ -1,13 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/gaps_repository.dart';
+import '../../core/db/places_repository.dart';
 import '../../core/db/raw_points_repository.dart';
 import '../../core/db/segmentation_repository.dart';
 import '../../core/permissions/permission_providers.dart';
 import '../../core/providers.dart';
 import '../../core/settings/setting_keys.dart';
+import '../../domain/places/place_resolver.dart';
 import '../../domain/timeline/timeline_entry.dart';
 import '../../domain/tracking/location_tracker.dart';
+import '../places/data/platform_place_resolver.dart';
+import '../places/place_label_service.dart';
 import 'data/geolocator_location_tracker.dart';
 import 'tracking_session.dart';
 
@@ -19,9 +23,27 @@ final gapsRepositoryProvider = Provider<GapsRepository>(
   (ref) => GapsRepository(ref.watch(databaseProvider)),
 );
 
+final placesRepositoryProvider = Provider<PlacesRepository>(
+  (ref) => PlacesRepository(ref.watch(databaseProvider)),
+);
+
 final segmentationRepositoryProvider = Provider<SegmentationRepository>(
   (ref) => SegmentationRepository(ref.watch(databaseProvider)),
 );
+
+/// Swap this implementation for offline or Google Places without UI changes.
+final placeResolverProvider = Provider<PlaceResolver>(
+  (ref) => PlatformPlaceResolver(),
+);
+
+final placeLabelServiceProvider = Provider<PlaceLabelService>((ref) {
+  return PlaceLabelService(
+    db: ref.watch(databaseProvider),
+    places: ref.watch(placesRepositoryProvider),
+    resolver: ref.watch(placeResolverProvider),
+    settings: ref.watch(settingsRepositoryProvider),
+  );
+});
 
 final locationTrackerProvider = Provider<LocationTracker>((ref) {
   final tracker = GeolocatorLocationTracker(
@@ -53,14 +75,24 @@ final rawPointCountProvider = StreamProvider<int>((ref) {
   return ref.watch(rawPointsRepositoryProvider).watchCount();
 });
 
-/// Today's visits + trips, ordered. Triggers a segmenter pass once.
+/// Map of placeId → Place for today's labelled visits.
+final placesByIdProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  final places = await ref.watch(placesRepositoryProvider).allActive();
+  return {for (final p in places) p.id: p};
+});
+
+/// Today's visits + trips, ordered. Runs segmenter then label pass.
 final todaysTimelineProvider = StreamProvider<List<TimelineEntry>>((ref) {
   final repo = ref.watch(segmentationRepositoryProvider);
-  repo.runOnce();
+  final labels = ref.watch(placeLabelServiceProvider);
+  () async {
+    await repo.runOnce();
+    await labels.processPending();
+    ref.invalidate(placesByIdProvider);
+  }();
   return repo.watchTimelineForDay(DateTime.now());
 });
 
-/// Kept for call sites that only need visits.
 final todaysVisitsProvider = StreamProvider((ref) {
   final repo = ref.watch(segmentationRepositoryProvider);
   return repo.watchVisitsForDay(DateTime.now());
@@ -89,12 +121,19 @@ final autoSaverLevelProvider = StreamProvider<int>((ref) {
       );
 });
 
+final autoLabelEnabledProvider = StreamProvider<bool>((ref) {
+  final repo = ref.watch(settingsRepositoryProvider);
+  return repo.watch(SettingKeys.autoLabelEnabled).map((raw) => raw != 'false');
+});
+
 Future<void> setTrackingModeSetting(WidgetRef ref, TrackingMode mode) async {
   await ref.read(trackingSessionProvider).setMode(mode);
 }
 
 Future<void> runSegmentation(WidgetRef ref) async {
   await ref.read(segmentationRepositoryProvider).runOnce();
+  await ref.read(placeLabelServiceProvider).processPending();
   ref.invalidate(todaysTimelineProvider);
   ref.invalidate(todaysVisitsProvider);
+  ref.invalidate(placesByIdProvider);
 }

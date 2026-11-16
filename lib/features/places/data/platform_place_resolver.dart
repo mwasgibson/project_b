@@ -5,17 +5,15 @@ import '../../../domain/places/place_resolver.dart';
 
 /// Reverse geocoding via the OS geocoder (`geocoding` package).
 ///
-/// Android uses [android.location.Geocoder]; iOS uses CLGeocoder.
+/// Android uses Geocoder; iOS uses CLGeocoder.
 /// May contact the vendor backend — disclosed in settings (docs/02).
+///
+/// Uses the stable top-level [geo.placemarkFromCoordinates] API (v3+).
 class PlatformPlaceResolver implements PlaceResolver {
-  PlatformPlaceResolver({geo.Geocoding? client}) : _client = client ?? geo.Geocoding();
-
-  final geo.Geocoding _client;
-
   @override
   Future<ResolvedPlace> resolve(double lat, double lng) async {
     try {
-      final marks = await _client.placemarkFromCoordinates(lat, lng);
+      final marks = await geo.placemarkFromCoordinates(lat, lng);
       if (marks.isEmpty) {
         throw const PlaceResolveException(PlaceResolveFailure.notFound);
       }
@@ -47,13 +45,15 @@ class PlatformPlaceResolver implements PlaceResolver {
       );
     } on PlaceResolveException {
       rethrow;
-    } on geo.NoResultFoundException {
-      throw const PlaceResolveException(PlaceResolveFailure.notFound);
     } catch (e) {
       final msg = e.toString();
-      // Platform rate limits often surface as IO_ERROR.
-      if (msg.contains('IO_ERROR') || msg.contains('network')) {
+      if (msg.contains('IO_ERROR') ||
+          msg.contains('network') ||
+          msg.contains('SocketException')) {
         throw PlaceResolveException(PlaceResolveFailure.transient, msg);
+      }
+      if (msg.contains('No result') || msg.contains('not found')) {
+        throw const PlaceResolveException(PlaceResolveFailure.notFound);
       }
       throw PlaceResolveException(PlaceResolveFailure.unavailable, msg);
     }
