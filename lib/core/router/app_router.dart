@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/calendar/presentation/calendar_screen.dart';
+import '../../features/calendar/presentation/event_editor_screen.dart';
 import '../../features/onboarding/presentation/background_permission_screen.dart';
 import '../../features/onboarding/presentation/location_permission_screen.dart';
 import '../../features/onboarding/presentation/welcome_screen.dart';
@@ -22,6 +23,8 @@ abstract final class Routes {
   static const onboardingBackground = '/onboarding/background';
   static const timeline = '/timeline';
   static const calendar = '/calendar';
+  static const eventNew = '/calendar/event/new';
+  static String eventEdit(String id) => '/calendar/event/$id';
   static const weather = '/weather';
   static const settings = '/settings';
   static const appearance = '/settings/appearance';
@@ -29,8 +32,6 @@ abstract final class Routes {
   static const keepAlive = '/help/keep-alive';
 }
 
-/// Notifier that bumps when onboarding completion changes so GoRouter
-/// re-runs redirect without destroying the navigator stack.
 class _RouterRefresh extends ChangeNotifier {
   void ping() => notifyListeners();
 }
@@ -39,9 +40,6 @@ final routerProvider = Provider<GoRouter>((ref) {
   final refresh = _RouterRefresh();
   ref.onDispose(refresh.dispose);
 
-  // Only refresh when the *value* of onboarding completion changes.
-  // Do not watch here — watching rebuilds this provider and creates a new
-  // GoRouter, which resets the user to initialLocation (e.g. after theme).
   ref.listen<AsyncValue<bool>>(onboardingCompletedProvider, (prev, next) {
     final was = prev?.valueOrNull;
     final now = next.valueOrNull;
@@ -84,6 +82,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.keepAlive,
         builder: (context, state) => const KeepAliveScreen(),
+      ),
+      GoRoute(
+        path: Routes.eventNew,
+        builder: (context, state) => const EventEditorScreen(),
+      ),
+      GoRoute(
+        path: '/calendar/event/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          if (id == 'new') return const EventEditorScreen();
+          return EventEditorScreen(eventId: id);
+        },
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(shell: shell),
