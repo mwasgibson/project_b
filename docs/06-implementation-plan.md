@@ -11,6 +11,8 @@ Rules for the build:
 
 Tracking feature IDs refer to doc 01 (F1 to F9). Screen IDs refer to doc 03.
 
+**Lived path, constraints, and divergences from this plan:** see [docs/07-build-roadmap.md](07-build-roadmap.md).
+
 ## Phases
 
 ### Phase 0: Setup and decisions
@@ -45,35 +47,43 @@ Done when: every permission path (granted, denied, later revoked) behaves as in 
 ### Phase 3: Tracking engine (F2, F3), the riskiest phase
 Goal: reliable background tracking you can trust.
 Tasks:
-- [ ] Define `LocationTracker` interface.
-- [ ] Implement with the chosen plugin (start with Transistorsoft in debug) and write `raw_points`.
-- [ ] Android foreground-service notification with pause/resume; boot restart.
-- [ ] Three battery modes and the auto-saver-at-low-battery rule.
-- [ ] Tracking health check and gap recording.
-- [ ] Keep-alive guide S22 for Samsung battery optimisation.
-- [ ] Head-to-head test of a free native-service plugin against the first one; record results.
+- [x] Define `LocationTracker` interface.
+- [x] Implement with free Geolocator path and write `raw_points` (Transistorsoft optional later via same interface).
+- [x] Android foreground-service notification with pause/resume; resume on app start.
+- [ ] Boot restart (RECEIVE_BOOT_COMPLETED wiring).
+- [x] Three battery modes and the auto-saver-at-low-battery rule.
+- [x] Tracking health check and gap recording.
+- [x] Keep-alive guide S22 for Samsung battery optimisation.
+- [ ] Head-to-head test of a free native-service plugin against a paid one; record results (optional for personal use).
 - [ ] Battery log: note battery % at fixed times per mode over several days.
+- [ ] Survive swipe-from-recents (headless) — optional hardening.
 - [ ] iOS: Always permission, significant-change/visit handling — deferred until a real iPhone is available; keep interface clean so iOS can land later.
 Done when: 3 consecutive days of normal life on the Samsung with screen off give a plausible point trail with no unexplained gaps over 30 minutes, and balanced mode battery cost is within the target in doc 01.
+**Status:** Core engine usable on Samsung (smoke-tested 2026-11-16). Multi-day soak and boot/swipe-kill still open.
 
 ### Phase 4: Segmentation and timeline (F4)
 Goal: raw points become a readable day.
 Tasks:
-- [ ] Segmenter with unit tests on synthetic data (stay, walk, drive, GPS jitter, tunnel gap).
-- [ ] Visit/trip/gap tables populated incrementally.
-- [ ] Timeline today (S5) and day detail (S6) with map, visit/trip detail (S7, S8).
-- [ ] Edit actions: rename, adjust times, merge, delete; `user_edited` protection.
-- [ ] Tune thresholds (100 m / 10 min defaults) against your own real data.
+- [x] Segmenter with unit tests on synthetic data (stay, short stop, two visits + trip).
+- [x] Visit/trip/gap tables populated incrementally.
+- [x] Timeline today (S5) with visit/trip list and visit detail (S7); day map S6 deferred.
+- [x] Edit actions: rename (via Phase 5 place), delete; `user_edited` protection.
+- [ ] Tune thresholds (100 m / 10 min defaults) against your own real multi-day data.
+- [ ] Trip detail S8 / day map S6.
 Done when: your real day from Phase 3 reads correctly, and edits survive re-segmentation.
+**Status:** Core list timeline + segmenter done; map views and long-data threshold tuning open.
 
 ### Phase 5: Place labelling (F5)
 Goal: names instead of coordinates.
 Tasks:
-- [ ] `PlaceResolver` with the platform geocoder implementation.
-- [ ] Labelling queue with retry when offline; `label_state` handling.
-- [ ] Place matching within radius; "use this name for visits near here" prompt.
-- [ ] Auto-label switch, places screen S15, and the disclosure about the geocoder.
+- [x] `PlaceResolver` with the platform geocoder implementation.
+- [x] Labelling queue with retry when offline; `label_state` handling.
+- [x] Place matching within radius; user rename reused for nearby visits.
+- [x] Auto-label switch and disclosure about the geocoder; rename from visit detail.
+- [ ] Places screen S15.
+- [ ] Optional offline city fallback.
 Done when: new visits get names online, stay pending offline, and user renames are reused.
+**Status:** Core labelling + rename done; S15 and offline pack optional.
 
 ### Phase 6: Calendar and reminders (F6)
 Goal: a calendar that also shows your movements.
@@ -176,7 +186,13 @@ flowchart LR
 
 ## Progress log
 - 2026-10-22: Planning docs 00 to 06 created. No code written yet.
-- 2026-10-24: Phase 0 skeleton and Phase 1 foundations written (theme, router, Drift schema, settings, shell, tests, bootstrap). Not compiled: no Flutter SDK in the authoring environment. Palette contrast verified numerically; added `outlineStrong` token so control borders meet 3:1.
+- 2026-10-24: Phase 0 skeleton and Phase 1 foundations written (theme, router, Drift schema, settings, shell, tests, bootstrap).
 - 2026-11-05: Phase 1 verified on Samsung.
 - 2026-11-10: iOS simulator build fixed (xcode-select / objective_c native assets); UI good. Decisions: display name Project B; no iPhone soon → Android-first; Supabase at Phase 9.
-- 2026-11-10: Phase 2 onboarding + permissions pushed (S1–S3, PermissionService, manifest/plist, Timeline permission cards). Awaiting Samsung verification of grant/deny paths.
+- 2026-11-10: Phase 2 onboarding + permissions (S1–S3, PermissionService, manifest/plist, Timeline permission cards).
+- 2026-11-10: Phase 3 start — LocationTracker + Geolocator writer, Timeline controls, S14, S22.
+- 2026-11-16: Permission loop fixed; FGS notification; outdoor smoke test on SM-A176B.
+- 2026-11-16: TrackingSession (gaps, auto-saver, resume on start, health); theme/nav bug fixed (stable GoRouter).
+- 2026-11-16: Phase 4 segmenter + timeline visits/trips + visit detail delete.
+- 2026-11-16: Phase 5 PlaceResolver, label queue, auto-label toggle, user rename.
+- 2026-11-17: docs/07-build-roadmap.md added (actual path, reasoning, constraints). Next: Phase 6 calendar.
