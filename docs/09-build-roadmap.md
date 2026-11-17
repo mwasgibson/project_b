@@ -1,6 +1,6 @@
 # Build roadmap: what we actually did
 
-This document records **how Project B was built in practice**, not only how it was planned. It sits beside `docs/06-implementation-plan.md` (the original plan). Where plan and path diverged, the reason is written down so future phases stay honest about constraints.
+This document records **how Project B was built in practice**, not only how it was planned. It sits beside `docs/08-security.md`. Where plan and path diverged, the reason is written down so future phases stay honest about constraints.
 
 **Audience:** you (and anyone revisiting the repo months later).  
 **Scope:** Phases 0–5 on `main` as of 2026-11-16, plus the decisions that shaped them.
@@ -10,13 +10,15 @@ This document records **how Project B was built in practice**, not only how it w
 ## 1. North star and constraints
 
 ### Product intent (from docs 01–02)
+
 - Privacy-first **location timeline + calendar** on one phone.
 - Local SQLite is the source of truth; cloud is optional and encrypted (Phase 9).
 - Battery and Samsung One UI reliability matter more than feature count early on.
 
 ### Hard constraints we treated as fixed
+
 | Constraint | Effect on the build |
-|---|---|
+| --- | --- |
 | **No physical iPhone** | Android-first for tracking. iOS simulator for UI only. `LocationTracker` stays an interface so iOS can land later without rewriting the UI. |
 | **Personal / no revenue** | Prefer free stack: Geolocator, OS geocoder, Open-Meteo later. Paid Transistorsoft left as a *possible* swap behind the same interface, not a day-one dependency. |
 | **Supabase only at Phase 9** | Explicit user decision. No premature auth, keys, or sync UI. |
@@ -24,6 +26,7 @@ This document records **how Project B was built in practice**, not only how it w
 | **Real device is Samsung SM-A176B** | Keep-alive guide (S22), FGS notification, and battery tips targeted at Samsung’s aggressive optimisation. |
 
 ### Engineering rules (from doc 06, kept in force)
+
 1. External capabilities behind interfaces: `LocationTracker`, `PlaceResolver`, (later) `WeatherProvider`, `SyncBackend`.
 2. Local-first: feature works offline before any network.
 3. Each phase ends with something runnable on the Samsung.
@@ -47,7 +50,7 @@ We followed the **risk-first** order: permissions and tracking before polish. We
 What we deferred deliberately:
 
 | Item | Why deferred |
-|---|---|
+| --- | --- |
 | Transistorsoft / paid plugin | Free Geolocator + FGS is enough for personal Android; interface allows swap. |
 | Boot restart + headless after swipe-kill | Hardening; needs more device time; not blocking a useful timeline. |
 | Full day map (S6) / trip detail map (S8) | List timeline first; map is enhancement. |
@@ -61,6 +64,7 @@ What we deferred deliberately:
 ## 3. Phase-by-phase narrative
 
 ### Phase 0 — Setup
+
 **Goal:** Clean repo, docs, app runs on Samsung and iOS simulator.
 
 **What we did:** Flutter + FVM, docs 01–06, CI baseline, display name Project B.
@@ -72,6 +76,7 @@ What we deferred deliberately:
 ---
 
 ### Phase 1 — Foundations
+
 **Goal:** Shell, theme, Drift schema, settings.
 
 **What we did:** Feature folders, Riverpod, go_router four tabs, light/dark/system, Drift tables mirroring doc 05, reusable empty states and chips.
@@ -81,6 +86,7 @@ What we deferred deliberately:
 ---
 
 ### Phase 2 — Onboarding and permissions (F1)
+
 **Goal:** Honest permission flow.
 
 **What we did:** S1–S3, `PermissionService`, Android manifest / iOS plist strings, Timeline cards for denied / services-off / “Allow all the time”.
@@ -92,11 +98,13 @@ What we deferred deliberately:
 ---
 
 ### Phase 3 — Tracking engine (F2, F3)
+
 **Goal:** Points on disk with the app backgrounded.
 
 **Plan said:** Transistorsoft in debug, free alternative head-to-head, multi-day battery log.
 
 **What we actually shipped:**
+
 - `LocationTracker` interface + `GeolocatorLocationTracker` (free).
 - `raw_points` writes with mode, accuracy, battery %.
 - Android **foreground service notification** via Geolocator `ForegroundNotificationConfig` + wake lock.
@@ -107,6 +115,7 @@ What we deferred deliberately:
 **Smoke test (2026-11-16):** Outdoor / near-home on SM-A176B; logs showed FGS bind and position updates. Limited by Wi‑Fi range that day — not a full multi-day soak.
 
 **Reasoning for Geolocator first:**
+
 - Personal project; avoid paid licence until proven need.
 - Interface means a paid plugin is a *replacement*, not a rewrite.
 - FGS notification is the main lever against One UI killing the process when the app is only backgrounded (not swipe-killed).
@@ -116,9 +125,11 @@ What we deferred deliberately:
 ---
 
 ### Phase 4 — Segmentation and timeline (F4)
+
 **Goal:** Points → visits and trips.
 
 **What we shipped:**
+
 - Pure `Segmenter` (100 m / ≥10 min) + unit tests.
 - `SegmentationRepository`: visits, trips, mark points processed.
 - Timeline: interleaved visit/trip rows, refresh, soft-delete visit.
@@ -131,9 +142,11 @@ What we deferred deliberately:
 ---
 
 ### Phase 5 — Place labelling (F5)
+
 **Goal:** Names, not coordinates.
 
 **What we shipped:**
+
 - `PlaceResolver` + `ResolvedPlace` / failure modes.
 - `PlatformPlaceResolver` (`geocoding` → OS Geocoder / CLGeocoder).
 - Haversine **place match** within radius; `PlacesRepository`.
@@ -150,7 +163,7 @@ What we deferred deliberately:
 ## 4. Cross-cutting incidents (worth remembering)
 
 | Issue | Root cause | Fix |
-|---|---|---|
+| --- | --- | --- |
 | Theme change kicked user to Timeline | `routerProvider` **watched** onboarding stream; any `app_settings` write rebuilt `GoRouter` | Stable router + `refreshListenable` only when onboarding *value* changes |
 | Permission loop on Start tracking | Re-prompting background after disclosure | Persist disclosure shown; deep-link to system settings when permanent |
 | Provider dispose cast | Wrong dispose wiring on tracker | `ref.onDispose(tracker.dispose)` without invalid cast |
@@ -173,11 +186,13 @@ UI               → repositories / session only (not plugins)
 ## 6. What “done” means for 0–5
 
 **Core done (usable daily on Samsung):**
+
 - Grant / deny paths, background disclosure.
 - Track with notification; pause/resume; modes; auto-saver; gaps; resume after app restart.
 - Segment into visits/trips; see them on Timeline; delete; rename places; auto-label with opt-out.
 
 **Not claiming yet:**
+
 - Multi-day gap-free trail under One UI with swipe-kill and reboot.
 - Battery &lt;5% extra measured over a week.
 - Map day view, calendar, weather, export, sync.
@@ -201,7 +216,7 @@ Recommended order from here:
 ## 8. Decision log (short)
 
 | Date | Decision | Reason |
-|---|---|---|
+| --- | --- | --- |
 | 2026-10 | Docs before code | Align product, privacy, schema |
 | 2026-11-10 | Name = Project B; no iPhone; Supabase @9 | User constraints |
 | 2026-11-10 | Geolocator not Transistorsoft first | Free personal use; interface for swap |

@@ -3,12 +3,14 @@
 Security is reviewed every phase, not at the end. Scope: v1 app plus optional Supabase sync.
 
 ## Assets
+
 1. Location history (visits, trips, raw points). Highest sensitivity.
 2. Calendar events and notes (can name people and places).
 3. Encryption keys (passphrase, recovery key, data key).
 4. Auth session tokens.
 
 ## Entry points
+
 - The phone itself (lost, unlocked, backed up, shared).
 - Supabase REST/Auth endpoints.
 - External calls: OS geocoder, weather API, map tiles.
@@ -16,11 +18,13 @@ Security is reviewed every phase, not at the end. Scope: v1 app plus optional Su
 - Local notifications (visible on lock screen).
 
 ## Trust boundaries
+
 Phone OS sandbox | App process | Network | Supabase | Third-party services.
 
 ## Threats and mitigations
+
 | Threat | Mitigation | Residual risk |
-|---|---|---|
+| --- | --- | --- |
 | Cloud database breach | Only ciphertext stored; minimal metadata (kind, day, timestamps) | Metadata reveals activity days |
 | Another user reads my rows | RLS `user_id = auth.uid()` on all tables; test with two accounts | Policy bug (tested, not eliminated) |
 | Server operator reads my data | Client-side E2EE, key never leaves device unwrapped | Trust in app code |
@@ -35,6 +39,7 @@ Phone OS sandbox | App process | Network | Supabase | Third-party services.
 | Logs leak coordinates | Local debug log only; coordinates scrubbed from logs by default | Developer mistakes |
 
 ## Phase checklist
+
 - [ ] Phase 2: disclosure copy matches real behaviour; permissions requested minimally
 - [ ] Phase 3: foreground service type declared; no location in logs
 - [ ] Phase 6: lock-screen notification privacy setting
@@ -43,4 +48,5 @@ Phone OS sandbox | App process | Network | Supabase | Third-party services.
 - [ ] Phase 10: dependency audit, privacy policy matches data flows, secret scan clean
 
 ## OWASP Mobile focus (for this app)
+
 Insecure data storage, insecure communication (HTTPS only), insufficient cryptography (vetted libraries only, no custom primitives), insecure authentication, privacy controls. Web-only items (XSS, CSRF, CORS) do not apply to the app itself.

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/db/app_database.dart';
 import '../../../core/widgets/content_width.dart';
 import '../calendar_providers.dart';
 
@@ -55,10 +54,9 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
     _notes.text = e.notes ?? '';
     _location.text = e.locationText ?? '';
     _allDay = e.allDay;
-    _start = DateTime.fromMillisecondsSinceEpoch(e.startAt, isUtc: true)
-        .toLocal();
-    _end =
-        DateTime.fromMillisecondsSinceEpoch(e.endAt, isUtc: true).toLocal();
+    _start =
+        DateTime.fromMillisecondsSinceEpoch(e.startAt, isUtc: true).toLocal();
+    _end = DateTime.fromMillisecondsSinceEpoch(e.endAt, isUtc: true).toLocal();
     setState(() => _hydrated = true);
   }
 
@@ -91,7 +89,8 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
     );
     if (time == null || !mounted) return;
     setState(() {
-      _start = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      _start =
+          DateTime(date.year, date.month, date.day, time.hour, time.minute);
       if (!_end.isAfter(_start)) {
         _end = _start.add(const Duration(hours: 1));
       }
@@ -191,7 +190,9 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
       ),
     );
     if (ok != true || widget.eventId == null) return;
-    await ref.read(calendarEventsRepositoryProvider).softDelete(widget.eventId!);
+    await ref
+        .read(calendarEventsRepositoryProvider)
+        .softDelete(widget.eventId!);
     if (mounted) context.pop();
   }
 
@@ -258,7 +259,8 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Starts'),
-              subtitle: Text(_allDay ? dayFmt.format(_start) : fmt.format(_start)),
+              subtitle:
+                  Text(_allDay ? dayFmt.format(_start) : fmt.format(_start)),
               trailing: const Icon(Icons.schedule),
               onTap: _pickStart,
             ),
