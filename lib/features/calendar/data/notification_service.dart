@@ -16,12 +16,6 @@ class NotificationService {
   Future<void> init() async {
     if (_ready) return;
     tzdata.initializeTimeZones();
-    // Best-effort local zone; UTC fallback is still usable for scheduling.
-    try {
-      tz.setLocalLocation(tz.local);
-    } catch (_) {
-      tz.setLocalLocation(tz.UTC);
-    }
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings(
@@ -60,7 +54,17 @@ class NotificationService {
     await init();
     if (!fireAtLocal.isAfter(DateTime.now())) return;
 
-    final when = tz.TZDateTime.from(fireAtLocal, tz.local);
+    // Schedule in UTC so we do not depend on a named IANA zone on device.
+    final utc = fireAtLocal.toUtc();
+    final when = tz.TZDateTime.utc(
+      utc.year,
+      utc.month,
+      utc.day,
+      utc.hour,
+      utc.minute,
+      utc.second,
+    );
+
     const android = AndroidNotificationDetails(
       'event_reminders',
       'Event reminders',
