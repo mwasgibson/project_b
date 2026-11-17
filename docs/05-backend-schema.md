@@ -141,7 +141,7 @@ Key-value: `tracking_enabled`, `tracking_mode`, `auto_saver_enabled`, `auto_save
 ### sync_outbox
 
 | Column | Type | Notes |
-|---|---|---|
+| --- | --- | --- |
 | id | INTEGER PK | |
 | record_kind | TEXT | place / visit / trip / event / reminder |
 | record_id | TEXT | |
@@ -161,7 +161,7 @@ erDiagram
 ### Local jobs
 
 | Job | When | Does |
-|---|---|---|
+| --- | --- | --- |
 | Segmenter | On new points, plus end of day | raw_points → visits / trips / gaps |
 | Labeller | After a visit closes, and on connectivity | Resolve place names |
 | Retention | Daily | Delete raw_points older than `raw_retention_days` |
@@ -177,15 +177,16 @@ Server never sees plaintext location, titles or notes.
 ### profiles
 
 | Column | Type | Constraints | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | id | uuid | PK, FK → auth.users.id | |
 | created_at | timestamptz | default now() | |
 
 ### key_envelopes
 
 Holds the wrapped data keys. One row per user.
+
 | Column | Type | Constraints | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | user_id | uuid | PK, FK → profiles.id | |
 | kdf | text | NOT NULL | e.g. `argon2id` |
 | kdf_params | jsonb | NOT NULL | memory, iterations, parallelism |
@@ -198,7 +199,7 @@ Holds the wrapped data keys. One row per user.
 ### devices
 
 | Column | Type | Constraints | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | id | uuid | PK | Client `device_id` |
 | user_id | uuid | NOT NULL, FK → profiles.id | |
 | label | text | | e.g. "Samsung phone" (plain text; user can leave blank) |
@@ -207,7 +208,7 @@ Holds the wrapped data keys. One row per user.
 ### sync_records
 
 | Column | Type | Constraints | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | id | uuid | PK (with user_id) | Client record id |
 | user_id | uuid | NOT NULL, FK → profiles.id | |
 | kind | text | NOT NULL | place / visit / trip / event / reminder |
@@ -223,7 +224,7 @@ Holds the wrapped data keys. One row per user.
 
 PK `(user_id, id)`. Indexes: `(user_id, server_seq)`, `(user_id, kind, day)`.
 
-### Relationships
+### Relationship
 
 ```mermaid
 erDiagram
@@ -245,7 +246,7 @@ Supabase exposes tables through PostgREST and auth through GoTrue. The client us
 ### Auth
 
 | Method | Path | Auth | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | POST | `/auth/v1/otp` | anon | Send email one-time code |
 | POST | `/auth/v1/verify` | anon | Verify code, return session |
 | POST | `/auth/v1/token?grant_type=refresh_token` | refresh token | Refresh session |
@@ -254,7 +255,7 @@ Supabase exposes tables through PostgREST and auth through GoTrue. The client us
 ### Key envelope
 
 | Method | Path | Auth | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | GET | `/rest/v1/key_envelopes?user_id=eq.{uid}` | user | Fetch wrapped keys (restore flow) |
 | POST | `/rest/v1/key_envelopes` | user | Create on first sync setup |
 | PATCH | `/rest/v1/key_envelopes?user_id=eq.{uid}` | user | Change passphrase (re-wrap) |
@@ -262,7 +263,7 @@ Supabase exposes tables through PostgREST and auth through GoTrue. The client us
 ### Devices
 
 | Method | Path | Auth | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | POST | `/rest/v1/devices` (upsert) | user | Register or update this device |
 | GET | `/rest/v1/devices` | user | List devices |
 | DELETE | `/rest/v1/devices?id=eq.{id}` | user | Remove a device |
@@ -270,7 +271,7 @@ Supabase exposes tables through PostgREST and auth through GoTrue. The client us
 ### Sync
 
 | Method | Path | Auth | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | POST | `/rest/v1/rpc/push_records` | user | Upsert a batch of records with last-write-wins |
 | GET | `/rest/v1/rpc/pull_records?since={server_seq}&limit=500` | user | Records changed after cursor |
 | DELETE | `/rest/v1/rpc/delete_my_cloud_data` | user | Remove all sync_records, key_envelopes, devices |
