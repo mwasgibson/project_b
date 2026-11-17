@@ -1,32 +1,67 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/db/app_database.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/theme/domain_colors.dart';
 import '../../../core/widgets/content_width.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../../../domain/calendar/day_agenda_item.dart';
+import '../../timeline/presentation/visit_detail_sheet.dart';
+import '../../tracking/tracking_providers.dart';
 import '../calendar_providers.dart';
+import '../data/ics_export.dart';
 
-/// S9 — month grid + selected day agenda (events). Timeline merge later.
+/// S9 — month grid + day agenda (events + visits).
 class CalendarScreen extends ConsumerWidget {
   const CalendarScreen({super.key});
 
   static const _weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+  Future<void> _exportDay(
+    BuildContext context,
+    WidgetRef ref,
+    List<CalendarEvent> events,
+  ) async {
+    if (events.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No events to export on this day')),
+      );
+      return;
+    }
+    final ics = IcsExport.events(events);
+    final dir = await getTemporaryDirectory();
+    final day = ref.read(selectedCalendarDayProvider);
+    final name =
+        'project-b-${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}.ics';
+    final file = File('${dir.path}/$name');
+    await file.writeAsString(ics);
+    await Share.shareXFiles(
+      [XFile(file.path, mimeType: 'text/calendar')],
+      subject: 'Project B events',
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final month = ref.watch(visibleCalendarMonthProvider);
     final selected = ref.watch(selectedCalendarDayProvider);
     final eventDays = ref.watch(eventDaysInMonthProvider).valueOrNull ?? {};
+    final agenda = ref.watch(dayAgendaProvider).valueOrNull ?? [];
     final events = ref.watch(eventsForSelectedDayProvider).valueOrNull ?? [];
+    final places = ref.watch(placesByIdProvider).valueOrNull ?? {};
     final monthLabel = DateFormat.yMMMM().format(month);
     final dayLabel = DateFormat.MMMEd().format(selected);
     final timeFmt = DateFormat.Hm();
+    final domain = context.domainColors;
 
     final first = DateTime(month.year, month.month, 1);
-    // Monday-based: weekday 1 = Mon … 7 = Sun
     final lead = first.weekday - 1;
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
     final cells = lead + daysInMonth;
@@ -36,6 +71,11 @@ class CalendarScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Calendar'),
         actions: [
+          IconButton(
+            tooltip: 'Export day (.ics)',
+            onPressed: () => _exportDay(context, ref, events),
+            icon: const Icon(Icons.ios_share_outlined),
+          ),
           IconButton(
             tooltip: 'Today',
             onPressed: () {
@@ -113,9 +153,7 @@ class CalendarScreen extends ConsumerWidget {
                         daysInMonth: daysInMonth,
                         month: month,
                         selected: selected,
-                        hasEvent: eventDays.contains(
-                          r * 7 + c - lead + 1,
-                        ),
+                        hasEvent: eventDays.contains(r * 7 + c - lead + 1),
                         onTap: (day) {
                           ref.read(selectedCalendarDayProvider.notifier).state =
                               day;
@@ -130,27 +168,52 @@ class CalendarScreen extends ConsumerWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            if (events.isEmpty)
+            if (agenda.isEmpty)
               const EmptyState(
                 icon: Icons.event_outlined,
-                title: 'No events',
-                message: 'Tap + to add one for this day.',
+                title: 'Nothing on this day',
+                message:
+                    'Add an event with +, or track a day so visits appear here.',
               )
             else
-              for (final e in events)
-                Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: Icon(
-                      e.allDay ? Icons.calendar_today_outlined : Icons.event,
-                      color: Theme.of(context).colorScheme.primary,
+              for (final item in agenda)
+                if (item.kind == DayAgendaKind.event)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: Icon(
+                        item.event!.allDay
+                            ? Icons.calendar_today_outlined
+                            : Icons.event,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      title: Text(item.event!.title),
+                      subtitle: Text(_eventSubtitle(item.event!, timeFmt)),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () =>
+                          context.push(Routes.eventEdit(item.event!.id)),
                     ),
-                    title: Text(e.title),
-                    subtitle: Text(_eventSubtitle(e, timeFmt)),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push(Routes.eventEdit(e.id)),
+                  )
+                else
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.place_outlined,
+                        color: domain.visit,
+                      ),
+                      title: Text(_visitTitle(item.visit!, places)),
+                      subtitle: Text(_visitSubtitle(item.visit!, timeFmt)),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => VisitDetailSheet.show(
+                        context,
+                        item.visit!,
+                        place: item.visit!.placeId == null
+                            ? null
+                            : places[item.visit!.placeId!],
+                      ),
+                    ),
                   ),
-                ),
           ],
         ),
       ),
@@ -158,12 +221,33 @@ class CalendarScreen extends ConsumerWidget {
   }
 
   static String _eventSubtitle(CalendarEvent e, DateFormat timeFmt) {
-    if (e.allDay) return 'All day';
+    if (e.allDay) return 'All day · Event';
     final s = DateTime.fromMillisecondsSinceEpoch(e.startAt, isUtc: true)
         .toLocal();
     final end =
         DateTime.fromMillisecondsSinceEpoch(e.endAt, isUtc: true).toLocal();
-    return '${timeFmt.format(s)} – ${timeFmt.format(end)}';
+    return '${timeFmt.format(s)} – ${timeFmt.format(end)} · Event';
+  }
+
+  static String _visitTitle(Visit v, Map<String, Place> places) {
+    final id = v.placeId;
+    if (id != null) {
+      final name = places[id]?.name?.trim();
+      if (name != null && name.isNotEmpty) return name;
+    }
+    return 'Visit';
+  }
+
+  static String _visitSubtitle(Visit v, DateFormat timeFmt) {
+    final s = DateTime.fromMillisecondsSinceEpoch(v.startAt, isUtc: true)
+        .toLocal();
+    final end = v.endAt == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(v.endAt!, isUtc: true).toLocal();
+    final range = end == null
+        ? '${timeFmt.format(s)} – now'
+        : '${timeFmt.format(s)} – ${timeFmt.format(end)}';
+    return '$range · Visit';
   }
 }
 

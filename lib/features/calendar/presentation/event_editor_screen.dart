@@ -1,12 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/widgets/content_width.dart';
 import '../calendar_providers.dart';
+import '../data/ics_export.dart';
 
-/// S11 — create or edit a calendar event.
+/// S11 — create or edit a calendar event (+ optional reminder).
 class EventEditorScreen extends ConsumerStatefulWidget {
   const EventEditorScreen({super.key, this.eventId});
 
@@ -28,6 +33,19 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
   bool _allDay = false;
   bool _loading = false;
   bool _hydrated = false;
+
+  /// null = no reminder; otherwise minutes before start.
+  int? _reminderOffsetMin;
+
+  static const _reminderChoices = <(int?, String)>[
+    (null, 'None'),
+    (0, 'At start'),
+    (5, '5 minutes before'),
+    (15, '15 minutes before'),
+    (30, '30 minutes before'),
+    (60, '1 hour before'),
+    (1440, '1 day before'),
+  ];
 
   @override
   void initState() {
@@ -57,6 +75,9 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
     _start =
         DateTime.fromMillisecondsSinceEpoch(e.startAt, isUtc: true).toLocal();
     _end = DateTime.fromMillisecondsSinceEpoch(e.endAt, isUtc: true).toLocal();
+    final reminder =
+        await ref.read(remindersRepositoryProvider).forEvent(e.id);
+    _reminderOffsetMin = reminder?.offsetBeforeMin;
     setState(() => _hydrated = true);
   }
 
@@ -144,8 +165,9 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
     final repo = ref.read(calendarEventsRepositoryProvider);
 
     try {
+      final String eventId;
       if (widget.isNew) {
-        await repo.create(
+        final created = await repo.create(
           title: title,
           startAt: startMs,
           endAt: endMs,
@@ -154,9 +176,11 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
           notes: _notes.text,
           locationText: _location.text,
         );
+        eventId = created.id;
       } else {
+        eventId = widget.eventId!;
         await repo.update(
-          id: widget.eventId!,
+          id: eventId,
           title: title,
           startAt: startMs,
           endAt: endMs,
@@ -164,6 +188,24 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
           allDay: _allDay,
           notes: _notes.text,
           locationText: _location.text,
+        );
+      }
+
+      final ok = await applyEventReminder(
+        ref: ref,
+        eventId: eventId,
+        eventTitle: title,
+        eventStartAt: startMs,
+        offsetBeforeMin: _reminderOffsetMin,
+      );
+      if (!ok && mounted && _reminderOffsetMin != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Event saved, but notification permission was denied. '
+              'Enable notifications in system settings for reminders.',
+            ),
+          ),
         );
       }
       if (mounted) context.pop();
@@ -190,10 +232,27 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
       ),
     );
     if (ok != true || widget.eventId == null) return;
+    await cancelEventReminder(ref, widget.eventId!);
     await ref
         .read(calendarEventsRepositoryProvider)
         .softDelete(widget.eventId!);
     if (mounted) context.pop();
+  }
+
+  Future<void> _exportIcs() async {
+    if (widget.eventId == null) return;
+    final e = await ref
+        .read(calendarEventsRepositoryProvider)
+        .getById(widget.eventId!);
+    if (e == null) return;
+    final ics = IcsExport.event(e);
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/${e.id}.ics');
+    await file.writeAsString(ics);
+    await Share.shareXFiles(
+      [XFile(file.path, mimeType: 'text/calendar')],
+      subject: e.title,
+    );
   }
 
   @override
@@ -211,12 +270,18 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
       appBar: AppBar(
         title: Text(widget.isNew ? 'New event' : 'Edit event'),
         actions: [
-          if (!widget.isNew)
+          if (!widget.isNew) ...[
+            IconButton(
+              tooltip: 'Export .ics',
+              onPressed: _loading ? null : _exportIcs,
+              icon: const Icon(Icons.ios_share_outlined),
+            ),
             IconButton(
               tooltip: 'Delete',
               onPressed: _loading ? null : _delete,
               icon: const Icon(Icons.delete_outline),
             ),
+          ],
           TextButton(
             onPressed: _loading ? null : _save,
             child: _loading
@@ -276,6 +341,27 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
               onTap: _pickEnd,
             ),
             const SizedBox(height: 8),
+            DropdownButtonFormField<int?>(
+              value: _reminderOffsetMin,
+              decoration: const InputDecoration(
+                labelText: 'Reminder',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (final (value, label) in _reminderChoices)
+                  DropdownMenuItem(value: value, child: Text(label)),
+              ],
+              onChanged: (v) => setState(() => _reminderOffsetMin = v),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Reminders use a local notification on this phone. '
+              'Nothing is sent to a server.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _location,
               textCapitalization: TextCapitalization.words,
