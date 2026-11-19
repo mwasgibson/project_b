@@ -41,46 +41,21 @@ class VisitDetailSheet extends ConsumerWidget {
   }
 
   Future<void> _rename(BuildContext context, WidgetRef ref) async {
-    final controller = TextEditingController(
-      text: place?.name?.trim() ?? '',
-    );
     final name = await showDialog<String>(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Rename place'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              hintText: 'e.g. Home, Java House',
-              labelText: 'Name',
-            ),
-            onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
+      builder: (ctx) => _RenamePlaceDialog(
+        initial: place?.name?.trim() ?? '',
+      ),
     );
-    controller.dispose();
     if (name == null || name.isEmpty || !context.mounted) return;
 
-    final placeRow = await ref.read(placesRepositoryProvider).ensureUserNamedPlace(
-          name: name,
-          lat: visit.lat,
-          lng: visit.lng,
-          existingPlaceId: place?.id ?? visit.placeId,
-        );
+    final placeRow =
+        await ref.read(placesRepositoryProvider).ensureUserNamedPlace(
+              name: name,
+              lat: visit.lat,
+              lng: visit.lng,
+              existingPlaceId: place?.id ?? visit.placeId,
+            );
     await ref.read(segmentationRepositoryProvider).attachPlace(
           visitId: visit.id,
           placeId: placeRow.id,
@@ -208,7 +183,8 @@ class VisitDetailSheet extends ConsumerWidget {
               label: Text(place == null ? 'Name this place' : 'Rename place'),
             ),
             const SizedBox(height: 8),
-            if (visit.labelState == 'pending' || visit.labelState == 'failed') ...[
+            if (visit.labelState == 'pending' ||
+                visit.labelState == 'failed') ...[
               OutlinedButton.icon(
                 onPressed: () async {
                   await ref
@@ -252,8 +228,7 @@ class VisitDetailSheet extends ConsumerWidget {
                 ref.invalidate(todaysTimelineProvider);
                 if (context.mounted) Navigator.pop(context);
               },
-              icon: Icon(Icons.delete_outline,
-                  color: theme.colorScheme.error),
+              icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
               label: Text(
                 'Delete visit',
                 style: TextStyle(color: theme.colorScheme.error),
@@ -262,6 +237,61 @@ class VisitDetailSheet extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Owns the [TextEditingController] for the full dialog route lifetime.
+class _RenamePlaceDialog extends StatefulWidget {
+  const _RenamePlaceDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_RenamePlaceDialog> createState() => _RenamePlaceDialogState();
+}
+
+class _RenamePlaceDialogState extends State<_RenamePlaceDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initial);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() => Navigator.pop(context, _controller.text.trim());
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Rename place'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.words,
+        decoration: const InputDecoration(
+          hintText: 'e.g. Home, Java House',
+          labelText: 'Name',
+        ),
+        onSubmitted: (_) => _save(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _save,
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }
