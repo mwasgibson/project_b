@@ -7,9 +7,10 @@ import '../../../core/router/app_router.dart';
 import '../../../core/settings/setting_keys.dart';
 import '../../../core/widgets/content_width.dart';
 import '../../../domain/tracking/location_tracker.dart';
+import '../../data/data_control_providers.dart';
 import '../../tracking/tracking_providers.dart';
 
-/// S14 — mode, auto-saver, auto-label, health, keep-alive.
+/// S14 — mode, auto-saver, auto-label, retention, health, keep-alive.
 class TrackingSettingsScreen extends ConsumerWidget {
   const TrackingSettingsScreen({super.key});
 
@@ -36,6 +37,8 @@ class TrackingSettingsScreen extends ConsumerWidget {
     final autoSaver = ref.watch(autoSaverEnabledProvider).valueOrNull ?? true;
     final level = ref.watch(autoSaverLevelProvider).valueOrNull ?? 20;
     final autoLabel = ref.watch(autoLabelEnabledProvider).valueOrNull ?? true;
+    final retention =
+        ref.watch(rawRetentionDaysProvider).valueOrNull ?? 30;
     final session = ref.watch(trackingSessionProvider);
 
     return Scaffold(
@@ -154,6 +157,51 @@ class TrackingSettingsScreen extends ConsumerWidget {
                     ref.invalidate(placesByIdProvider);
                   }
                 },
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Raw point retention',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: ListTile(
+                title: const Text('Keep raw points for'),
+                subtitle: Text(
+                  '$retention days. Visits and trips are not deleted by this.',
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      onPressed: retention <= 7
+                          ? null
+                          : () async {
+                              await ref
+                                  .read(dataControlServiceProvider)
+                                  .setRetentionDays(retention - 7);
+                              await ref
+                                  .read(dataControlServiceProvider)
+                                  .purgeExpiredRawPoints();
+                              ref.invalidate(rawRetentionDaysProvider);
+                              ref.invalidate(rawPointCountProvider);
+                            },
+                      icon: const Icon(Icons.remove),
+                    ),
+                    IconButton(
+                      onPressed: retention >= 365
+                          ? null
+                          : () async {
+                              await ref
+                                  .read(dataControlServiceProvider)
+                                  .setRetentionDays(retention + 7);
+                              ref.invalidate(rawRetentionDaysProvider);
+                            },
+                      icon: const Icon(Icons.add),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 24),

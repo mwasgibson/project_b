@@ -60,53 +60,10 @@ class _DataScreenState extends ConsumerState<DataScreen> {
   }
 
   Future<void> _confirmDelete() async {
-    final controller = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Delete all local data?'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'This removes visits, trips, places, raw points, events and '
-                'weather cache on this phone. Theme and tracking settings stay.\n\n'
-                'Type DELETE to confirm.',
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Type DELETE',
-                  border: OutlineInputBorder(),
-                ),
-                textCapitalization: TextCapitalization.characters,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (controller.text.trim().toUpperCase() == 'DELETE') {
-                  Navigator.pop(ctx, true);
-                }
-              },
-              child: const Text('Delete everything'),
-            ),
-          ],
-        );
-      },
+      builder: (ctx) => const _DeleteConfirmDialog(),
     );
-    // Dialog owns no StatefulWidget controller — dispose after route settles.
-    await Future<void>.delayed(Duration.zero);
-    controller.dispose();
     if (ok != true || !mounted) return;
 
     await _run(() async {
@@ -162,7 +119,7 @@ class _DataScreenState extends ConsumerState<DataScreen> {
                       c == null
                           ? '…'
                           : 'Older than ${c.retentionDays} days are removed. '
-                              'Visits and trips are kept.',
+                              'Visits and trips are kept. Change this under Tracking.',
                     ),
                   ),
                 ],
@@ -227,6 +184,70 @@ class _DataScreenState extends ConsumerState<DataScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DeleteConfirmDialog extends StatefulWidget {
+  const _DeleteConfirmDialog();
+
+  @override
+  State<_DeleteConfirmDialog> createState() => _DeleteConfirmDialogState();
+}
+
+class _DeleteConfirmDialogState extends State<_DeleteConfirmDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Delete all local data?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'This removes visits, trips, places, raw points, events and '
+            'weather cache on this phone. Theme and tracking settings stay.\n\n'
+            'Type DELETE to confirm.',
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Type DELETE',
+              border: OutlineInputBorder(),
+            ),
+            textCapitalization: TextCapitalization.characters,
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _controller.text.trim().toUpperCase() == 'DELETE'
+              ? () => Navigator.pop(context, true)
+              : null,
+          child: const Text('Delete everything'),
+        ),
+      ],
     );
   }
 }
