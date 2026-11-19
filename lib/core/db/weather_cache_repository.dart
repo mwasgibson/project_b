@@ -1,7 +1,5 @@
 import 'dart:convert';
 
-import 'package:drift/drift.dart';
-
 import '../../domain/weather/weather_models.dart';
 import '../../domain/weather/weather_provider.dart';
 import 'app_database.dart';
