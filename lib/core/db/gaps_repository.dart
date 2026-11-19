@@ -12,18 +12,15 @@ class GapsRepository {
   final AppDatabase _db;
   final _uuid = const Uuid();
 
-  /// Open gap start time while tracking is interrupted, or null.
   int? _openStartAt;
   GapReason? _openReason;
 
-  /// Begin a gap if one is not already open.
   void begin(GapReason reason) {
     if (_openStartAt != null) return;
     _openStartAt = DateTime.now().toUtc().millisecondsSinceEpoch;
     _openReason = reason;
   }
 
-  /// Close an open gap if it lasted at least [minDuration].
   Future<void> end({Duration minDuration = const Duration(minutes: 1)}) async {
     final start = _openStartAt;
     final reason = _openReason;
@@ -42,6 +39,22 @@ class GapsRepository {
             reason: Value(reason.name),
           ),
         );
+  }
+
+  Stream<List<Gap>> watchForDay(DateTime localDay) {
+    final start = DateTime(localDay.year, localDay.month, localDay.day);
+    final end = start.add(const Duration(days: 1));
+    final startMs = start.toUtc().millisecondsSinceEpoch;
+    final endMs = end.toUtc().millisecondsSinceEpoch;
+
+    return (_db.select(_db.gaps)
+          ..where(
+            (t) =>
+                t.startAt.isBiggerOrEqualValue(startMs) &
+                t.startAt.isSmallerThanValue(endMs),
+          )
+          ..orderBy([(t) => OrderingTerm.asc(t.startAt)]))
+        .watch();
   }
 
   Future<int> countAll() async {

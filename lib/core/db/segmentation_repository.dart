@@ -31,8 +31,9 @@ class SegmentationRepository {
   final Segmenter _segmenter;
   final _uuid = const Uuid();
 
-  static const _mergeRadiusM = 150.0;
-  static const _mergeMaxGap = Duration(hours: 2);
+  /// Same place across pause/stop still counts as one stay.
+  static const _mergeRadiusM = 200.0;
+  static const _mergeMaxGap = Duration(hours: 24);
 
   Future<SegmentationRunResult> runOnce({bool manual = false}) async {
     final unprocessed = await (_db.select(_db.rawPoints)
@@ -135,7 +136,7 @@ class SegmentationRepository {
     );
   }
 
-  /// Collapse consecutive same-place visits (GPS jitter / batch splits).
+  /// One continuous stay at the same place, even if tracking paused/stopped.
   Future<int> mergeNearbyVisits() async {
     var totalMerged = 0;
 
@@ -159,6 +160,8 @@ class SegmentationRepository {
             b.placeId != null &&
             a.placeId == b.placeId;
 
+        // Same coordinates = same stay. Pause/stop only creates a gap row,
+        // not a second visit.
         final canMerge = gap >= 0 &&
             gap <= _mergeMaxGap.inMilliseconds &&
             (dist <= _mergeRadiusM || samePlace) &&
@@ -206,7 +209,7 @@ class SegmentationRepository {
 
         totalMerged++;
         mergedThisPass = true;
-        break; // restart scan after structural change
+        break;
       }
 
       if (!mergedThisPass) break;
@@ -272,14 +275,21 @@ class SegmentationRepository {
     });
   }
 
-  Stream<List<TimelineEntry>> watchTimelineForDay(DateTime localDay) {
+  /// Visits, trips and tracking gaps for a local day.
+  Stream<List<TimelineEntry>> watchTimelineForDay(
+    DateTime localDay, {
+    required Stream<List<Gap>> gapsStream,
+  }) {
     return watchVisitsForDay(localDay).asyncExpand((visits) {
-      return watchTripsForDay(localDay).map((trips) {
-        final entries = <TimelineEntry>[
-          for (final v in visits) TimelineEntry.visit(v),
-          for (final t in trips) TimelineEntry.trip(t),
-        ]..sort((a, b) => a.sortAt.compareTo(b.sortAt));
-        return entries;
+      return watchTripsForDay(localDay).asyncExpand((trips) {
+        return gapsStream.map((gaps) {
+          final entries = <TimelineEntry>[
+            for (final v in visits) TimelineEntry.visit(v),
+            for (final t in trips) TimelineEntry.trip(t),
+            for (final g in gaps) TimelineEntry.gap(g),
+          ]..sort((a, b) => a.sortAt.compareTo(b.sortAt));
+          return entries;
+        });
       });
     });
   }
