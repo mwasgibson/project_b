@@ -31,8 +31,8 @@ class SegmentationRepository {
   final Segmenter _segmenter;
   final _uuid = const Uuid();
 
-  /// Same place across pause/stop still counts as one stay.
-  static const _mergeRadiusM = 200.0;
+  /// Continuous stay at one location — GPS jitter and re-labelling still one visit.
+  static const _mergeRadiusM = 300.0;
   static const _mergeMaxGap = Duration(hours: 24);
 
   Future<SegmentationRunResult> runOnce({bool manual = false}) async {
@@ -136,9 +136,18 @@ class SegmentationRepository {
     );
   }
 
-  /// One continuous stay at the same place, even if tracking paused/stopped.
+  /// Collapse fragmented / overlapping stays at the same location into one visit.
   Future<int> mergeNearbyVisits() async {
     var totalMerged = 0;
+
+    final placeRows = await (_db.select(_db.places)
+          ..where((t) => t.deleted.equals(false)))
+        .get();
+    final placeName = <String, String>{
+      for (final p in placeRows)
+        if (p.name != null && p.name!.trim().isNotEmpty)
+          p.id: p.name!.trim().toLowerCase(),
+    };
 
     while (true) {
       final visits = await (_db.select(_db.visits)
@@ -154,30 +163,46 @@ class SegmentationRepository {
         final a = visits[i];
         final b = visits[i + 1];
         final aEnd = a.endAt ?? a.startAt;
+        final bEnd = b.endAt ?? b.startAt;
+        // Negative gap = overlapping windows (common with batch segmentation).
         final gap = b.startAt - aEnd;
         final dist = _haversineM(a.lat, a.lng, b.lat, b.lng);
-        final samePlace = a.placeId != null &&
+
+        final samePlaceId = a.placeId != null &&
             b.placeId != null &&
             a.placeId == b.placeId;
+        final nameA =
+            a.placeId == null ? null : placeName[a.placeId!];
+        final nameB =
+            b.placeId == null ? null : placeName[b.placeId!];
+        final sameName = nameA != null && nameB != null && nameA == nameB;
 
-        // Same coordinates = same stay. Pause/stop only creates a gap row,
-        // not a second visit.
-        final canMerge = gap >= 0 &&
-            gap <= _mergeMaxGap.inMilliseconds &&
-            (dist <= _mergeRadiusM || samePlace) &&
-            !a.userEdited &&
-            !b.userEdited;
+        final spatialOk =
+            dist <= _mergeRadiusM || samePlaceId || sameName;
+        // Allow overlap (gap < 0) and gaps up to 24h at the same place.
+        final temporalOk = gap <= _mergeMaxGap.inMilliseconds;
+
+        final canMerge =
+            spatialOk && temporalOk && !a.userEdited && !b.userEdited;
 
         if (!canMerge) continue;
 
         final now = DateTime.now().toUtc().millisecondsSinceEpoch;
-        final newEnd = math.max(aEnd, b.endAt ?? b.startAt);
+        final newStart = math.min(a.startAt, b.startAt);
+        final newEnd = math.max(aEnd, bEnd);
         final pts = (a.pointCount ?? 0) + (b.pointCount ?? 0);
-        final placeId = a.placeId ?? b.placeId;
+
+        // Prefer a real place name over a plus-code style id when choosing placeId.
+        final placeId = _preferPlaceId(
+          a.placeId,
+          b.placeId,
+          placeName,
+        );
 
         await _db.transaction(() async {
           await (_db.update(_db.visits)..where((t) => t.id.equals(a.id))).write(
                 VisitsCompanion(
+                  startAt: Value(newStart),
                   endAt: Value(newEnd),
                   lat: Value((a.lat + b.lat) / 2),
                   lng: Value((a.lng + b.lng) / 2),
@@ -194,10 +219,14 @@ class SegmentationRepository {
                 ),
               );
 
+          // Drop trips that only linked the fragments of the same stay.
           await (_db.update(_db.trips)
                 ..where(
                   (t) =>
-                      t.fromVisitId.equals(b.id) | t.toVisitId.equals(b.id),
+                      t.fromVisitId.equals(b.id) |
+                      t.toVisitId.equals(b.id) |
+                      (t.fromVisitId.equals(a.id) & t.toVisitId.equals(b.id)) |
+                      (t.fromVisitId.equals(b.id) & t.toVisitId.equals(a.id)),
                 ))
               .write(
             TripsCompanion(
@@ -216,6 +245,30 @@ class SegmentationRepository {
     }
 
     return totalMerged;
+  }
+
+  /// Prefer place with a human name over plus-code / empty labels.
+  static String? _preferPlaceId(
+    String? a,
+    String? b,
+    Map<String, String> names,
+  ) {
+    if (a == null) return b;
+    if (b == null) return a;
+    final na = names[a];
+    final nb = names[b];
+    final aPlus = na == null || _looksLikePlusCode(na);
+    final bPlus = nb == null || _looksLikePlusCode(nb);
+    if (aPlus && !bPlus) return b;
+    if (bPlus && !aPlus) return a;
+    return a;
+  }
+
+  static bool _looksLikePlusCode(String name) {
+    // e.g. QPG2+5WX — short Open Location Code fragments from geocoders.
+    final n = name.trim();
+    if (n.length < 6 || n.length > 12) return false;
+    return RegExp(r'^[A-Z0-9]+\+[A-Z0-9]+$', caseSensitive: false).hasMatch(n);
   }
 
   Stream<List<Visit>> watchVisitsForDay(DateTime localDay) {
@@ -275,7 +328,6 @@ class SegmentationRepository {
     });
   }
 
-  /// Visits, trips and tracking gaps for a local day.
   Stream<List<TimelineEntry>> watchTimelineForDay(
     DateTime localDay, {
     required Stream<List<Gap>> gapsStream,

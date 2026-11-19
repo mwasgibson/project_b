@@ -86,10 +86,16 @@ final placesByIdProvider = FutureProvider<Map<String, Place>>((ref) async {
   return {for (final p in places) p.id: p};
 });
 
-/// Unique places with visit counts (duplicates merged).
 final visitedPlacesProvider = FutureProvider<List<VisitedPlace>>((ref) async {
   return ref.watch(placesRepositoryProvider).listVisitedPlaces();
 });
+
+Future<void> _postProcessPlaces(WidgetRef? ref, ProviderRef? pref) async {
+  final places = (ref?.read ?? pref!.read)(placesRepositoryProvider);
+  final seg = (ref?.read ?? pref!.read)(segmentationRepositoryProvider);
+  await places.consolidateDuplicates();
+  await seg.mergeNearbyVisits();
+}
 
 final todaysTimelineProvider = StreamProvider<List<TimelineEntry>>((ref) {
   final repo = ref.watch(segmentationRepositoryProvider);
@@ -98,6 +104,8 @@ final todaysTimelineProvider = StreamProvider<List<TimelineEntry>>((ref) {
   () async {
     await repo.runOnce(manual: false);
     await labels.processPending();
+    await ref.read(placesRepositoryProvider).consolidateDuplicates();
+    await ref.read(segmentationRepositoryProvider).mergeNearbyVisits();
     ref.invalidate(placesByIdProvider);
     ref.invalidate(visitedPlacesProvider);
   }();
@@ -158,17 +166,19 @@ Future<String> runSegmentation(WidgetRef ref) async {
       .runOnce(manual: true);
   await ref.read(placeLabelServiceProvider).processPending();
   await ref.read(placesRepositoryProvider).consolidateDuplicates();
+  final extraMerged =
+      await ref.read(segmentationRepositoryProvider).mergeNearbyVisits();
   await ref.read(dataControlServiceProvider).purgeExpiredRawPoints();
   ref.invalidate(todaysTimelineProvider);
   ref.invalidate(todaysVisitsProvider);
   ref.invalidate(placesByIdProvider);
   ref.invalidate(visitedPlacesProvider);
 
-  if (result.visitsCreated == 0 && result.visitsMerged > 0) {
-    return 'Merged ${result.visitsMerged} same-place visit'
-        '${result.visitsMerged == 1 ? '' : 's'}';
+  final merged = result.visitsMerged + extraMerged;
+  if (result.visitsCreated == 0 && merged > 0) {
+    return 'Merged $merged same-place visit${merged == 1 ? '' : 's'}';
   }
-  if (result.unprocessedBefore == 0 && result.visitsMerged == 0) {
+  if (result.unprocessedBefore == 0 && merged == 0) {
     return 'Nothing new to process';
   }
   if (result.visitsCreated == 0) {
@@ -178,7 +188,7 @@ Future<String> runSegmentation(WidgetRef ref) async {
     '${result.visitsCreated} visit${result.visitsCreated == 1 ? '' : 's'}',
     if (result.tripsCreated > 0)
       '${result.tripsCreated} trip${result.tripsCreated == 1 ? '' : 's'}',
-    if (result.visitsMerged > 0) 'merged ${result.visitsMerged}',
+    if (merged > 0) 'merged $merged',
   ];
   return 'Found ${parts.join(' · ')}';
 }
