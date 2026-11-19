@@ -1,6 +1,7 @@
 # Implementation Plan: Project B
 
 ## Approach
+
 Build order follows risk. The riskiest thing is reliable background tracking, proven early. See progress log below for the lived path and constraints (Android-first, no iPhone hardware, Supabase deferred to Phase 9).
 
 ## Status
@@ -14,6 +15,7 @@ Build order follows risk. The riskiest thing is reliable background tracking, pr
 | 9 Encrypted sync | Deferred until after MVP soak |
 
 ## Phase 8: Data control (F8)
+
 - [x] S17 Data and export — counts, JSON export, GPX export (share sheet)
 - [x] Delete all local data with typed `DELETE` confirmation; stops tracking first
 - [x] Raw point retention (default 30 days) on Tracking settings; purge on Data open / Find visits
