@@ -116,21 +116,23 @@ class TimelineScreen extends ConsumerWidget {
             icon: const Icon(Icons.refresh),
             onPressed: () => _findVisits(context, ref),
           ),
+          if (status == TrackingStatus.on)
+            IconButton(
+              tooltip: 'Pause',
+              icon: const Icon(Icons.pause_circle_outline),
+              onPressed: () => session.pause(),
+            ),
+          if (status == TrackingStatus.paused)
+            IconButton(
+              tooltip: 'Resume',
+              icon: const Icon(Icons.play_circle_outline),
+              onPressed: () => session.resume(),
+            ),
           if (status == TrackingStatus.on || status == TrackingStatus.paused)
             IconButton(
-              tooltip: status == TrackingStatus.on ? 'Pause' : 'Resume',
-              icon: Icon(
-                status == TrackingStatus.on
-                    ? Icons.pause_circle_outline
-                    : Icons.play_circle_outline,
-              ),
-              onPressed: () async {
-                if (status == TrackingStatus.on) {
-                  await session.pause();
-                } else {
-                  await session.resume();
-                }
-              },
+              tooltip: 'Stop tracking',
+              icon: const Icon(Icons.stop_circle_outlined),
+              onPressed: () => session.stop(),
             ),
           IconButton(
             tooltip: 'Tracking settings',
@@ -153,19 +155,33 @@ class TimelineScreen extends ConsumerWidget {
             ),
             if (count > 0 || lastAt != null || entries.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text(
-                [
-                  if (count > 0) '$count point${count == 1 ? '' : 's'}',
-                  if (visitCount > 0)
-                    '$visitCount visit${visitCount == 1 ? '' : 's'}',
-                  if (tripCount > 0)
-                    '$tripCount trip${tripCount == 1 ? '' : 's'}',
-                  if (lastAt != null)
-                    'Last: ${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(lastAt, isUtc: true).toLocal())}',
-                ].join(' · '),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+              InkWell(
+                onTap: count > 0 ? () => context.push(Routes.points) : null,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    [
+                      if (count > 0) '$count point${count == 1 ? '' : 's'}',
+                      if (visitCount > 0)
+                        '$visitCount visit${visitCount == 1 ? '' : 's'}',
+                      if (tripCount > 0)
+                        '$tripCount trip${tripCount == 1 ? '' : 's'}',
+                      if (lastAt != null)
+                        'Last: ${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(lastAt, isUtc: true).toLocal())}',
+                    ].join(' · '),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
+                          decoration: count > 0
+                              ? TextDecoration.underline
+                              : null,
+                          decorationColor: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant,
+                        ),
+                  ),
+                ),
               ),
             ],
             if (status == TrackingStatus.on)
@@ -191,7 +207,7 @@ class TimelineScreen extends ConsumerWidget {
                           ),
                         ),
                         subtitle: Text(
-                          'Tracking may be blocked by battery optimisation.',
+                          'Some phones limit background apps. Check the battery tip.',
                           style: TextStyle(
                             color:
                                 Theme.of(context).colorScheme.onErrorContainer,
@@ -334,7 +350,7 @@ class TimelineScreen extends ConsumerWidget {
                 message: status == TrackingStatus.on
                     ? 'Stay in one place a few minutes, then tap Find visits. '
                         'Automatic visits use ~10 minutes; Find visits is more lenient.'
-                    : 'Tap play in the app bar to resume.',
+                    : 'Tap play in the app bar to resume, or stop tracking fully.',
                 actionLabel: 'Find visits',
                 onAction: () => _findVisits(context, ref),
               )

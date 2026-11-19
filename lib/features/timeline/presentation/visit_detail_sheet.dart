@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/db/app_database.dart';
 import '../../tracking/tracking_providers.dart';
 
-/// S7 — visit detail: rename place, retry label, delete.
+/// S7 — visit detail: rename place, retry label, soft-delete.
 class VisitDetailSheet extends ConsumerWidget {
   const VisitDetailSheet({
     super.key,
@@ -204,10 +204,10 @@ class VisitDetailSheet extends ConsumerWidget {
                 final ok = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    title: const Text('Delete this visit?'),
+                    title: const Text('Remove this visit?'),
                     content: const Text(
-                      'The visit is removed from your timeline. '
-                      'Raw points stay on this phone until retention clears them.',
+                      'It moves to Deleted visits in Settings. '
+                      'You can restore it later or delete it forever there.',
                     ),
                     actions: [
                       TextButton(
@@ -216,7 +216,7 @@ class VisitDetailSheet extends ConsumerWidget {
                       ),
                       FilledButton(
                         onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('Delete'),
+                        child: const Text('Remove'),
                       ),
                     ],
                   ),
@@ -226,11 +226,12 @@ class VisitDetailSheet extends ConsumerWidget {
                     .read(segmentationRepositoryProvider)
                     .softDeleteVisit(visit.id);
                 ref.invalidate(todaysTimelineProvider);
+                ref.invalidate(deletedVisitsProvider);
                 if (context.mounted) Navigator.pop(context);
               },
               icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
               label: Text(
-                'Delete visit',
+                'Remove visit',
                 style: TextStyle(color: theme.colorScheme.error),
               ),
             ),
@@ -241,7 +242,6 @@ class VisitDetailSheet extends ConsumerWidget {
   }
 }
 
-/// Owns the [TextEditingController] for the full dialog route lifetime.
 class _RenamePlaceDialog extends StatefulWidget {
   const _RenamePlaceDialog({required this.initial});
 
