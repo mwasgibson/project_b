@@ -18,7 +18,7 @@ import '../../tracking/tracking_providers.dart';
 import '../calendar_providers.dart';
 import '../data/ics_export.dart';
 
-/// S9 — month grid + day agenda (events + visits).
+/// S9 — month log of movement: visits and trips, optional events.
 class CalendarScreen extends ConsumerWidget {
   const CalendarScreen({super.key});
 
@@ -48,11 +48,28 @@ class CalendarScreen extends ConsumerWidget {
     );
   }
 
+  static String _formatDuration(int startMs, int? endMs) {
+    if (endMs == null) return 'ongoing';
+    final d = Duration(milliseconds: endMs - startMs);
+    if (d.inHours >= 1) {
+      final m = d.inMinutes.remainder(60);
+      return m == 0 ? '${d.inHours} h' : '${d.inHours} h $m min';
+    }
+    if (d.inMinutes < 1) return '<1 min';
+    return '${d.inMinutes} min';
+  }
+
+  static String _formatDistance(double? meters) {
+    if (meters == null) return '';
+    if (meters >= 1000) return '${(meters / 1000).toStringAsFixed(1)} km';
+    return '${meters.round()} m';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final month = ref.watch(visibleCalendarMonthProvider);
     final selected = ref.watch(selectedCalendarDayProvider);
-    final eventDays = ref.watch(eventDaysInMonthProvider).valueOrNull ?? {};
+    final activityDays = ref.watch(activityDaysInMonthProvider);
     final agenda = ref.watch(dayAgendaProvider).valueOrNull ?? [];
     final events = ref.watch(eventsForSelectedDayProvider).valueOrNull ?? [];
     final places = ref.watch(placesByIdProvider).valueOrNull ?? {};
@@ -67,12 +84,16 @@ class CalendarScreen extends ConsumerWidget {
     final cells = lead + daysInMonth;
     final rows = (cells / 7).ceil();
 
+    final visitCount =
+        agenda.where((i) => i.kind == DayAgendaKind.visit).length;
+    final tripCount = agenda.where((i) => i.kind == DayAgendaKind.trip).length;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Calendar'),
         actions: [
           IconButton(
-            tooltip: 'Export day (.ics)',
+            tooltip: 'Export events (.ics)',
             onPressed: () => _exportDay(context, ref, events),
             icon: const Icon(Icons.ios_share_outlined),
           ),
@@ -89,10 +110,11 @@ class CalendarScreen extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push(Routes.eventNew),
-        tooltip: 'New event',
-        child: const Icon(Icons.add),
+        tooltip: 'Add event',
+        icon: const Icon(Icons.add),
+        label: const Text('Event'),
       ),
       body: ContentWidth(
         child: ListView(
@@ -153,7 +175,8 @@ class CalendarScreen extends ConsumerWidget {
                         daysInMonth: daysInMonth,
                         month: month,
                         selected: selected,
-                        hasEvent: eventDays.contains(r * 7 + c - lead + 1),
+                        hasActivity:
+                            activityDays.contains(r * 7 + c - lead + 1),
                         onTap: (day) {
                           ref.read(selectedCalendarDayProvider.notifier).state =
                               day;
@@ -163,57 +186,89 @@ class CalendarScreen extends ConsumerWidget {
                 ],
               ),
             const SizedBox(height: 20),
-            Text(
-              dayLabel,
-              style: Theme.of(context).textTheme.titleMedium,
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    dayLabel,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                if (visitCount > 0 || tripCount > 0)
+                  Text(
+                    [
+                      if (visitCount > 0)
+                        '$visitCount visit${visitCount == 1 ? '' : 's'}',
+                      if (tripCount > 0)
+                        '$tripCount trip${tripCount == 1 ? '' : 's'}',
+                    ].join(' · '),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+              ],
             ),
             const SizedBox(height: 8),
             if (agenda.isEmpty)
               const EmptyState(
-                icon: Icons.event_outlined,
-                title: 'Nothing on this day',
+                icon: Icons.route_outlined,
+                title: 'No movement logged',
                 message:
-                    'Add an event with +, or track a day so visits appear here.',
+                    'Visits and trips from tracking show up here by day. '
+                    'You can also add a planned event with + Event.',
               )
             else
               for (final item in agenda)
-                if (item.kind == DayAgendaKind.event)
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      leading: Icon(
-                        item.event!.allDay
-                            ? Icons.calendar_today_outlined
-                            : Icons.event,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      title: Text(item.event!.title),
-                      subtitle: Text(_eventSubtitle(item.event!, timeFmt)),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () =>
-                          context.push(Routes.eventEdit(item.event!.id)),
-                    ),
-                  )
-                else
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      leading: Icon(
-                        Icons.place_outlined,
-                        color: domain.visit,
-                      ),
-                      title: Text(_visitTitle(item.visit!, places)),
-                      subtitle: Text(_visitSubtitle(item.visit!, timeFmt)),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => VisitDetailSheet.show(
-                        context,
-                        item.visit!,
-                        place: item.visit!.placeId == null
-                            ? null
-                            : places[item.visit!.placeId!],
+                switch (item.kind) {
+                  DayAgendaKind.visit => Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.place_outlined,
+                          color: domain.visit,
+                        ),
+                        title: Text(_visitTitle(item.visit!, places)),
+                        subtitle:
+                            Text(_visitSubtitle(item.visit!, timeFmt)),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => VisitDetailSheet.show(
+                          context,
+                          item.visit!,
+                          place: item.visit!.placeId == null
+                              ? null
+                              : places[item.visit!.placeId!],
+                        ),
                       ),
                     ),
-                  ),
+                  DayAgendaKind.trip => Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.directions_outlined,
+                          color: domain.trip,
+                        ),
+                        title: const Text('Trip'),
+                        subtitle: Text(_tripSubtitle(item.trip!, timeFmt)),
+                      ),
+                    ),
+                  DayAgendaKind.event => Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: Icon(
+                          item.event!.allDay
+                              ? Icons.calendar_today_outlined
+                              : Icons.event,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        title: Text(item.event!.title),
+                        subtitle: Text(_eventSubtitle(item.event!, timeFmt)),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () =>
+                            context.push(Routes.eventEdit(item.event!.id)),
+                      ),
+                    ),
+                },
           ],
         ),
       ),
@@ -235,7 +290,11 @@ class CalendarScreen extends ConsumerWidget {
       final name = places[id]?.name?.trim();
       if (name != null && name.isNotEmpty) return name;
     }
-    return 'Visit';
+    return switch (v.labelState) {
+      'pending' => 'Labelling…',
+      'disabled' => 'Unlabelled place',
+      _ => 'Visit',
+    };
   }
 
   static String _visitSubtitle(Visit v, DateFormat timeFmt) {
@@ -247,7 +306,21 @@ class CalendarScreen extends ConsumerWidget {
     final range = end == null
         ? '${timeFmt.format(s)} – now'
         : '${timeFmt.format(s)} – ${timeFmt.format(end)}';
-    return '$range · Visit';
+    return '$range · ${_formatDuration(v.startAt, v.endAt)} · Visit';
+  }
+
+  static String _tripSubtitle(Trip t, DateFormat timeFmt) {
+    final s = DateTime.fromMillisecondsSinceEpoch(t.startAt, isUtc: true)
+        .toLocal();
+    final end =
+        DateTime.fromMillisecondsSinceEpoch(t.endAt, isUtc: true).toLocal();
+    final parts = <String>[
+      '${timeFmt.format(s)} – ${timeFmt.format(end)}',
+      _formatDuration(t.startAt, t.endAt),
+      if (t.distanceM != null) _formatDistance(t.distanceM),
+      'Trip',
+    ];
+    return parts.join(' · ');
   }
 }
 
@@ -258,7 +331,7 @@ class _DayCell extends StatelessWidget {
     required this.daysInMonth,
     required this.month,
     required this.selected,
-    required this.hasEvent,
+    required this.hasActivity,
     required this.onTap,
   });
 
@@ -267,7 +340,7 @@ class _DayCell extends StatelessWidget {
   final int daysInMonth;
   final DateTime month;
   final DateTime selected;
-  final bool hasEvent;
+  final bool hasActivity;
   final ValueChanged<DateTime> onTap;
 
   @override
@@ -319,7 +392,7 @@ class _DayCell extends StatelessWidget {
                     ),
               ),
             ),
-            if (hasEvent)
+            if (hasActivity)
               Container(
                 width: 5,
                 height: 5,

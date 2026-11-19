@@ -114,6 +114,36 @@ class SegmentationRepository {
         .watch();
   }
 
+  /// Local day numbers in [month] that have at least one visit (for calendar dots).
+  Stream<Set<int>> watchVisitDaysInMonth(DateTime month) {
+    final start = DateTime(month.year, month.month);
+    final end = DateTime(month.year, month.month + 1);
+    final startMs = start.toUtc().millisecondsSinceEpoch;
+    final endMs = end.toUtc().millisecondsSinceEpoch;
+
+    return (_db.select(_db.visits)
+          ..where(
+            (t) =>
+                t.deleted.equals(false) &
+                t.startAt.isBiggerOrEqualValue(startMs) &
+                t.startAt.isSmallerThanValue(endMs),
+          ))
+        .watch()
+        .map((rows) {
+      final days = <int>{};
+      for (final v in rows) {
+        final local = DateTime.fromMillisecondsSinceEpoch(
+          v.startAt,
+          isUtc: true,
+        ).toLocal();
+        if (local.year == month.year && local.month == month.month) {
+          days.add(local.day);
+        }
+      }
+      return days;
+    });
+  }
+
   /// Visits and trips for a local day, ordered by start time.
   Stream<List<TimelineEntry>> watchTimelineForDay(DateTime localDay) {
     return watchVisitsForDay(localDay).asyncExpand((visits) {

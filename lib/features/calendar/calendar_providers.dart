@@ -40,24 +40,45 @@ final eventsForSelectedDayProvider =
 
 final visitsForSelectedDayProvider = StreamProvider<List<Visit>>((ref) {
   final day = ref.watch(selectedCalendarDayProvider);
-  return ref.watch(segmentationRepositoryProvider).watchVisitsForDay(day);
+  final repo = ref.watch(segmentationRepositoryProvider);
+  // Catch up segmentation when browsing calendar days.
+  () async {
+    await repo.runOnce();
+    await ref.read(placeLabelServiceProvider).processPending();
+    ref.invalidate(placesByIdProvider);
+  }();
+  return repo.watchVisitsForDay(day);
 });
 
-/// Events + visits for the selected day, sorted by start time.
+final tripsForSelectedDayProvider = StreamProvider<List<Trip>>((ref) {
+  final day = ref.watch(selectedCalendarDayProvider);
+  return ref.watch(segmentationRepositoryProvider).watchTripsForDay(day);
+});
+
+/// Movement log for the selected day: visits + trips first, then events.
 final dayAgendaProvider = Provider<AsyncValue<List<DayAgendaItem>>>((ref) {
   final events = ref.watch(eventsForSelectedDayProvider);
   final visits = ref.watch(visitsForSelectedDayProvider);
-  if (events.isLoading || visits.isLoading) {
+  final trips = ref.watch(tripsForSelectedDayProvider);
+  if (events.isLoading || visits.isLoading || trips.isLoading) {
     return const AsyncValue.loading();
   }
-  if (events.hasError) return AsyncValue.error(events.error!, StackTrace.current);
-  if (visits.hasError) return AsyncValue.error(visits.error!, StackTrace.current);
+  if (events.hasError) {
+    return AsyncValue.error(events.error!, StackTrace.current);
+  }
+  if (visits.hasError) {
+    return AsyncValue.error(visits.error!, StackTrace.current);
+  }
+  if (trips.hasError) {
+    return AsyncValue.error(trips.error!, StackTrace.current);
+  }
 
   final items = <DayAgendaItem>[
-    for (final e in events.valueOrNull ?? const <CalendarEvent>[])
-      DayAgendaItem.event(e),
     for (final v in visits.valueOrNull ?? const <Visit>[])
       DayAgendaItem.visit(v),
+    for (final t in trips.valueOrNull ?? const <Trip>[]) DayAgendaItem.trip(t),
+    for (final e in events.valueOrNull ?? const <CalendarEvent>[])
+      DayAgendaItem.event(e),
   ]..sort((a, b) => a.sortAt.compareTo(b.sortAt));
   return AsyncValue.data(items);
 });
@@ -67,6 +88,18 @@ final eventDaysInMonthProvider = StreamProvider<Set<int>>((ref) {
   return ref
       .watch(calendarEventsRepositoryProvider)
       .watchEventDaysInMonth(month);
+});
+
+final visitDaysInMonthProvider = StreamProvider<Set<int>>((ref) {
+  final month = ref.watch(visibleCalendarMonthProvider);
+  return ref.watch(segmentationRepositoryProvider).watchVisitDaysInMonth(month);
+});
+
+/// Days with any logged activity (visits or events) for month dots.
+final activityDaysInMonthProvider = Provider<Set<int>>((ref) {
+  final events = ref.watch(eventDaysInMonthProvider).valueOrNull ?? {};
+  final visits = ref.watch(visitDaysInMonthProvider).valueOrNull ?? {};
+  return {...events, ...visits};
 });
 
 final reminderForEventProvider =
@@ -101,8 +134,7 @@ Future<bool> applyEventReminder({
     return false;
   }
 
-  final fireAtMs =
-      eventStartAt - offsetBeforeMin * 60 * 1000;
+  final fireAtMs = eventStartAt - offsetBeforeMin * 60 * 1000;
   final row = await reminders.upsertForEvent(
     eventId: eventId,
     fireAt: fireAtMs,
