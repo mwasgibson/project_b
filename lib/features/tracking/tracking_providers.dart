@@ -32,7 +32,6 @@ final segmentationRepositoryProvider = Provider<SegmentationRepository>(
   (ref) => SegmentationRepository(ref.watch(databaseProvider)),
 );
 
-/// Swap this implementation for offline or Google Places without UI changes.
 final placeResolverProvider = Provider<PlaceResolver>(
   (ref) => PlatformPlaceResolver(),
 );
@@ -81,12 +80,12 @@ final placesByIdProvider = FutureProvider<Map<String, Place>>((ref) async {
   return {for (final p in places) p.id: p};
 });
 
-/// Today's visits + trips, ordered. Runs segmenter then label pass.
+/// Today's visits + trips. Auto pass uses strict thresholds.
 final todaysTimelineProvider = StreamProvider<List<TimelineEntry>>((ref) {
   final repo = ref.watch(segmentationRepositoryProvider);
   final labels = ref.watch(placeLabelServiceProvider);
   () async {
-    await repo.runOnce();
+    await repo.runOnce(manual: false);
     await labels.processPending();
     ref.invalidate(placesByIdProvider);
   }();
@@ -130,10 +129,28 @@ Future<void> setTrackingModeSetting(WidgetRef ref, TrackingMode mode) async {
   await ref.read(trackingSessionProvider).setMode(mode);
 }
 
-Future<void> runSegmentation(WidgetRef ref) async {
-  await ref.read(segmentationRepositoryProvider).runOnce();
+/// User-initiated segmentation (Find visits / refresh). Returns a short status.
+Future<String> runSegmentation(WidgetRef ref) async {
+  final result = await ref
+      .read(segmentationRepositoryProvider)
+      .runOnce(manual: true);
   await ref.read(placeLabelServiceProvider).processPending();
   ref.invalidate(todaysTimelineProvider);
   ref.invalidate(todaysVisitsProvider);
   ref.invalidate(placesByIdProvider);
+
+  if (result.unprocessedBefore == 0) {
+    return 'No new points to process';
+  }
+  if (result.visitsCreated == 0) {
+    return 'No visits yet from ${result.unprocessedBefore} point'
+        '${result.unprocessedBefore == 1 ? '' : 's'} '
+        '(need ~2 min in one place)';
+  }
+  final parts = <String>[
+    '${result.visitsCreated} visit${result.visitsCreated == 1 ? '' : 's'}',
+    if (result.tripsCreated > 0)
+      '${result.tripsCreated} trip${result.tripsCreated == 1 ? '' : 's'}',
+  ];
+  return 'Found ${parts.join(' · ')}';
 }
