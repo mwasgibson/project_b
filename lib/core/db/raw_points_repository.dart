@@ -46,6 +46,13 @@ class RawPointsRepository {
     return row?.recordedAt;
   }
 
+  Future<RawPoint?> lastSample() async {
+    final query = _db.select(_db.rawPoints)
+      ..orderBy([(t) => OrderingTerm.desc(t.recordedAt)])
+      ..limit(1);
+    return query.getSingleOrNull();
+  }
+
   Stream<List<RawPoint>> watchRecent({int limit = 50}) {
     final query = _db.select(_db.rawPoints)
       ..orderBy([(t) => OrderingTerm.desc(t.recordedAt)])

@@ -2,12 +2,10 @@
 
 ## Unreleased
 ### Added
-- Phase 6 complete (core): day agenda merges events + visits; local reminders;
-  .ics export via share sheet.
-- docs/07-build-roadmap.md — lived build path, reasoning, constraints.
-- Phase 5: PlaceResolver, auto-label, user rename.
-- Phase 4: segmenter, visits/trips on timeline.
-- Phase 3: tracking, FGS, gaps, auto-saver.
+- Phase 7: Open-Meteo weather (rounded coords, cache, S12 screen).
+- Calendar as movement log: visits + trips on day agenda; activity dots.
+- Phase 6: events, reminders, .ics export.
+- Phases 3–5: tracking, segmenter, place labelling.
 
 ### Fixed
 - Settings theme change no longer resets navigation.
