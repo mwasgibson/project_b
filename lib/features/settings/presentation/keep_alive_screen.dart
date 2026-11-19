@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/widgets/content_width.dart';
 
-/// S22 — Samsung / aggressive OEM battery guide (docs/03).
+/// S22 — background battery guide (docs/03). Wording is phone-agnostic.
 class KeepAliveScreen extends StatelessWidget {
   const KeepAliveScreen({super.key});
 
@@ -11,58 +11,49 @@ class KeepAliveScreen extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Keep tracking alive')),
+      appBar: AppBar(title: const Text('Battery tip')),
       body: ContentWidth(
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
             Text(
-              'Samsung and some other phones stop apps to save battery. '
-              'That can leave gaps in your timeline even when tracking is on.',
+              'Some phones stop apps to save battery. That can leave gaps in '
+              'your timeline even when tracking is on.',
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 24),
-            Text('On Samsung (One UI)', style: theme.textTheme.titleMedium),
+            Text('What to try', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             const _Step(
               n: 1,
               text:
-                  'Open Settings → Apps → Project B → Battery (or App battery usage).',
+                  'Open your phone’s Settings → Apps → Project B → Battery (or App battery usage).',
             ),
             const _Step(
               n: 2,
-              text: 'Choose Unrestricted (not Optimised or Restricted).',
+              text:
+                  'Choose Unrestricted / No restrictions (not Optimised or Restricted).',
             ),
             const _Step(
               n: 3,
               text:
-                  'In Settings → Battery → Background usage limits, make sure Project B is not sleeping or deep-sleeping.',
+                  'If your phone has “sleeping apps” or “background usage limits”, make sure Project B is not listed there.',
             ),
             const _Step(
               n: 4,
               text:
-                  'Optional: lock the app in Recents so One UI is less likely to kill it.',
+                  'Optional: keep Project B in Recents / lock it so the system is less likely to close it.',
             ),
             const SizedBox(height: 24),
-            Text('Also check',
-                style: theme.textTheme.titleMedium),
+            Text('Also check', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             Text(
-              '• Location permission is "Allow all the time".\n'
+              '• Location permission is “Allow all the time”.\n'
               '• Location services are on.\n'
               '• After a reboot, open Project B once if tracking did not resume.',
               style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'A persistent notification for tracking will arrive in a later '
-              'update (foreground service). Until then, unrestricted battery '
-              'and Always location are the main levers on Samsung.',
-              style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),

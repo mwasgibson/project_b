@@ -10,14 +10,16 @@ import '../../features/onboarding/presentation/welcome_screen.dart';
 import '../../features/settings/presentation/appearance_screen.dart';
 import '../../features/settings/presentation/data_screen.dart';
 import '../../features/settings/presentation/keep_alive_screen.dart';
+import '../../features/settings/presentation/places_screen.dart';
+import '../../features/settings/presentation/points_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/settings/presentation/tracking_settings_screen.dart';
+import '../../features/settings/presentation/trash_screen.dart';
 import '../../features/timeline/presentation/timeline_screen.dart';
 import '../../features/weather/presentation/weather_screen.dart';
 import '../permissions/permission_providers.dart';
 import 'app_shell.dart';
 
-/// Route paths follow docs/03-app-flow.md.
 abstract final class Routes {
   static const onboardingWelcome = '/onboarding/welcome';
   static const onboardingLocation = '/onboarding/location';
@@ -31,6 +33,9 @@ abstract final class Routes {
   static const appearance = '/settings/appearance';
   static const trackingSettings = '/settings/tracking';
   static const data = '/settings/data';
+  static const places = '/settings/places';
+  static const points = '/settings/points';
+  static const trash = '/settings/trash';
   static const keepAlive = '/help/keep-alive';
 }
 
@@ -141,6 +146,18 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'data',
                     builder: (context, state) => const DataScreen(),
+                  ),
+                  GoRoute(
+                    path: 'places',
+                    builder: (context, state) => const PlacesScreen(),
+                  ),
+                  GoRoute(
+                    path: 'points',
+                    builder: (context, state) => const PointsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'trash',
+                    builder: (context, state) => const TrashScreen(),
                   ),
                 ],
               ),

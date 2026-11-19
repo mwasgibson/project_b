@@ -76,12 +76,19 @@ final rawPointCountProvider = StreamProvider<int>((ref) {
   return ref.watch(rawPointsRepositoryProvider).watchCount();
 });
 
+final recentRawPointsProvider = StreamProvider((ref) {
+  return ref.watch(rawPointsRepositoryProvider).watchRecent(limit: 200);
+});
+
+final deletedVisitsProvider = StreamProvider((ref) {
+  return ref.watch(segmentationRepositoryProvider).watchDeletedVisits();
+});
+
 final placesByIdProvider = FutureProvider<Map<String, Place>>((ref) async {
   final places = await ref.watch(placesRepositoryProvider).allActive();
   return {for (final p in places) p.id: p};
 });
 
-/// Today's visits + trips. Auto pass uses strict thresholds.
 final todaysTimelineProvider = StreamProvider<List<TimelineEntry>>((ref) {
   final repo = ref.watch(segmentationRepositoryProvider);
   final labels = ref.watch(placeLabelServiceProvider);
@@ -137,7 +144,6 @@ Future<void> setTrackingModeSetting(WidgetRef ref, TrackingMode mode) async {
   await ref.read(trackingSessionProvider).setMode(mode);
 }
 
-/// User-initiated segmentation (Find visits / refresh). Returns a short status.
 Future<String> runSegmentation(WidgetRef ref) async {
   final result = await ref
       .read(segmentationRepositoryProvider)
@@ -149,7 +155,11 @@ Future<String> runSegmentation(WidgetRef ref) async {
   ref.invalidate(placesByIdProvider);
   ref.invalidate(rawPointCountProvider);
 
-  if (result.unprocessedBefore == 0) {
+  if (result.visitsCreated == 0 && result.visitsMerged > 0) {
+    return 'Merged ${result.visitsMerged} overlapping visit'
+        '${result.visitsMerged == 1 ? '' : 's'}';
+  }
+  if (result.unprocessedBefore == 0 && result.visitsMerged == 0) {
     return 'No new points to process';
   }
   if (result.visitsCreated == 0) {
@@ -161,6 +171,8 @@ Future<String> runSegmentation(WidgetRef ref) async {
     '${result.visitsCreated} visit${result.visitsCreated == 1 ? '' : 's'}',
     if (result.tripsCreated > 0)
       '${result.tripsCreated} trip${result.tripsCreated == 1 ? '' : 's'}',
+    if (result.visitsMerged > 0)
+      'merged ${result.visitsMerged}',
   ];
   return 'Found ${parts.join(' · ')}';
 }

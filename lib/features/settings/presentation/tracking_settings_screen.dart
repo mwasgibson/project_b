@@ -10,7 +10,7 @@ import '../../../domain/tracking/location_tracker.dart';
 import '../../data/data_control_providers.dart';
 import '../../tracking/tracking_providers.dart';
 
-/// S14 — mode, auto-saver, auto-label, retention, health, keep-alive.
+/// S14 — on/off, mode, auto-saver, auto-label, retention, last point, battery tip.
 class TrackingSettingsScreen extends ConsumerWidget {
   const TrackingSettingsScreen({super.key});
 
@@ -27,6 +27,14 @@ class TrackingSettingsScreen extends ConsumerWidget {
         TrackingMode.saver => 'Fewer updates, lightest on battery (~75 m).',
       };
 
+  static String _statusLabel(TrackingStatus status) => switch (status) {
+        TrackingStatus.on => 'Recording',
+        TrackingStatus.paused => 'Paused',
+        TrackingStatus.needsPermission => 'Needs permission',
+        TrackingStatus.locationServicesOff => 'Location services off',
+        TrackingStatus.off => 'Off',
+      };
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(trackingModeSettingProvider).valueOrNull ??
@@ -37,9 +45,10 @@ class TrackingSettingsScreen extends ConsumerWidget {
     final autoSaver = ref.watch(autoSaverEnabledProvider).valueOrNull ?? true;
     final level = ref.watch(autoSaverLevelProvider).valueOrNull ?? 20;
     final autoLabel = ref.watch(autoLabelEnabledProvider).valueOrNull ?? true;
-    final retention =
-        ref.watch(rawRetentionDaysProvider).valueOrNull ?? 30;
+    final retention = ref.watch(rawRetentionDaysProvider).valueOrNull ?? 30;
     final session = ref.watch(trackingSessionProvider);
+    final trackingOn =
+        status == TrackingStatus.on || status == TrackingStatus.paused;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Tracking')),
@@ -47,6 +56,46 @@ class TrackingSettingsScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            Text('Tracking', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Card(
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    title: const Text('Track location'),
+                    subtitle: Text(_statusLabel(status)),
+                    value: trackingOn,
+                    onChanged: (on) async {
+                      if (on) {
+                        await session.start(mode);
+                      } else {
+                        await session.stop();
+                      }
+                    },
+                  ),
+                  if (status == TrackingStatus.on) ...[
+                    const Divider(height: 1),
+                    ListTile(
+                      title: const Text('Pause'),
+                      subtitle: const Text(
+                        'Stops recording temporarily without turning tracking off.',
+                      ),
+                      trailing: const Icon(Icons.pause_circle_outline),
+                      onTap: () => session.pause(),
+                    ),
+                  ],
+                  if (status == TrackingStatus.paused) ...[
+                    const Divider(height: 1),
+                    ListTile(
+                      title: const Text('Resume'),
+                      trailing: const Icon(Icons.play_circle_outline),
+                      onTap: () => session.resume(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
             Text(
               'Battery mode',
               style: Theme.of(context).textTheme.titleMedium,
@@ -205,43 +254,38 @@ class TrackingSettingsScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 24),
-            Text(
-              'Status',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('Status', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             Card(
               child: Column(
                 children: [
                   ListTile(
-                    title: const Text('Engine'),
-                    subtitle: Text(status.name),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    title: const Text('Points on this phone'),
-                    subtitle: Text('$count'),
+                    title: const Text('Saved points'),
+                    subtitle: Text('$count on this phone'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push(Routes.points),
                   ),
                   const Divider(height: 1),
                   FutureBuilder<String?>(
                     future: session.healthLabel(),
                     builder: (context, snap) {
                       return ListTile(
-                        title: const Text('Health'),
+                        title: const Text('Last point received'),
                         subtitle: Text(
                           snap.data ??
                               (status == TrackingStatus.on
-                                  ? 'Waiting for first point…'
-                                  : 'Not tracking'),
+                                  ? 'Waiting for the first sample…'
+                                  : 'None while tracking is off'),
                         ),
                       );
                     },
                   ),
                   const Divider(height: 1),
                   ListTile(
-                    title: const Text('Samsung / battery tip'),
+                    title: const Text('Battery tip'),
                     subtitle: const Text(
-                      'Exempt Project B from battery optimisation so tracking survives sleep.',
+                      'Some phones limit apps in the background. '
+                      'Allow unrestricted battery use so tracking can keep running.',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => context.push(Routes.keepAlive),
@@ -249,14 +293,6 @@ class TrackingSettingsScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-            if (status == TrackingStatus.on || status == TrackingStatus.paused)
-              OutlinedButton(
-                onPressed: () async {
-                  await ref.read(trackingSessionProvider).stop();
-                },
-                child: const Text('Stop tracking'),
-              ),
           ],
         ),
       ),

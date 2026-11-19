@@ -30,6 +30,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(themeModeProvider).value ?? ThemeMode.system;
     final tracking = ref.watch(trackingStatusProvider).valueOrNull;
+    final points = ref.watch(rawPointCountProvider).valueOrNull ?? 0;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -56,9 +57,20 @@ class SettingsScreen extends ConsumerWidget {
                     onTap: () => context.push(Routes.trackingSettings),
                   ),
                   const Divider(height: 1),
-                  const _UnavailableTile(
-                    icon: Icons.place_outlined,
-                    title: 'Places',
+                  ListTile(
+                    leading: const Icon(Icons.place_outlined),
+                    title: const Text('Places'),
+                    subtitle: const Text('Named locations from your visits'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push(Routes.places),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.bubble_chart_outlined),
+                    title: const Text('Saved points'),
+                    subtitle: Text('$points on this phone'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push(Routes.points),
                   ),
                   const Divider(height: 1),
                   ListTile(
@@ -69,9 +81,19 @@ class SettingsScreen extends ConsumerWidget {
                     onTap: () => context.push(Routes.data),
                   ),
                   const Divider(height: 1),
-                  const _UnavailableTile(
-                    icon: Icons.cloud_outlined,
-                    title: 'Sync',
+                  ListTile(
+                    leading: const Icon(Icons.delete_outline),
+                    title: const Text('Deleted visits'),
+                    subtitle: const Text('Restore or remove for good'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push(Routes.trash),
+                  ),
+                  const Divider(height: 1),
+                  const ListTile(
+                    enabled: false,
+                    leading: Icon(Icons.cloud_outlined),
+                    title: Text('Sync'),
+                    subtitle: Text('Later — encrypted cloud (Phase 9)'),
                   ),
                 ],
               ),
@@ -79,23 +101,6 @@ class SettingsScreen extends ConsumerWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _UnavailableTile extends StatelessWidget {
-  const _UnavailableTile({required this.icon, required this.title});
-
-  final IconData icon;
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      enabled: false,
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: const Text('Not available yet'),
     );
   }
 }
