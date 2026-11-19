@@ -9,6 +9,7 @@ import '../../core/permissions/permission_providers.dart';
 import '../../core/providers.dart';
 import '../../core/settings/setting_keys.dart';
 import '../../domain/places/place_resolver.dart';
+import '../../domain/places/visited_place.dart';
 import '../../domain/timeline/timeline_entry.dart';
 import '../../domain/tracking/location_tracker.dart';
 import '../data/data_control_providers.dart';
@@ -85,6 +86,11 @@ final placesByIdProvider = FutureProvider<Map<String, Place>>((ref) async {
   return {for (final p in places) p.id: p};
 });
 
+/// Unique places with visit counts (duplicates merged).
+final visitedPlacesProvider = FutureProvider<List<VisitedPlace>>((ref) async {
+  return ref.watch(placesRepositoryProvider).listVisitedPlaces();
+});
+
 final todaysTimelineProvider = StreamProvider<List<TimelineEntry>>((ref) {
   final repo = ref.watch(segmentationRepositoryProvider);
   final gaps = ref.watch(gapsRepositoryProvider);
@@ -93,6 +99,7 @@ final todaysTimelineProvider = StreamProvider<List<TimelineEntry>>((ref) {
     await repo.runOnce(manual: false);
     await labels.processPending();
     ref.invalidate(placesByIdProvider);
+    ref.invalidate(visitedPlacesProvider);
   }();
   final day = DateTime.now();
   return repo.watchTimelineForDay(
@@ -150,10 +157,12 @@ Future<String> runSegmentation(WidgetRef ref) async {
       .read(segmentationRepositoryProvider)
       .runOnce(manual: true);
   await ref.read(placeLabelServiceProvider).processPending();
+  await ref.read(placesRepositoryProvider).consolidateDuplicates();
   await ref.read(dataControlServiceProvider).purgeExpiredRawPoints();
   ref.invalidate(todaysTimelineProvider);
   ref.invalidate(todaysVisitsProvider);
   ref.invalidate(placesByIdProvider);
+  ref.invalidate(visitedPlacesProvider);
 
   if (result.visitsCreated == 0 && result.visitsMerged > 0) {
     return 'Merged ${result.visitsMerged} same-place visit'

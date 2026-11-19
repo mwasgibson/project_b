@@ -33,6 +33,8 @@ abstract final class Routes {
   static const trackingSettings = '/settings/tracking';
   static const data = '/settings/data';
   static const places = '/settings/places';
+  static String placeDetail(String key) =>
+      '/settings/places/${Uri.encodeComponent(key)}';
   static const trash = '/settings/trash';
   static const keepAlive = '/help/keep-alive';
 }
@@ -148,6 +150,17 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'places',
                     builder: (context, state) => const PlacesScreen(),
+                    routes: [
+                      GoRoute(
+                        path: ':key',
+                        builder: (context, state) {
+                          final raw = state.pathParameters['key']!;
+                          return PlaceDetailScreen(
+                            placeKey: Uri.decodeComponent(raw),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                   GoRoute(
                     path: 'trash',
