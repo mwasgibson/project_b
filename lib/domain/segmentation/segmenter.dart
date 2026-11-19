@@ -6,11 +6,24 @@ class SegmenterConfig {
     this.visitRadiusM = 100,
     this.minVisitDuration = const Duration(minutes: 10),
     this.minTripDistanceM = 50,
+    this.minPointsPerVisit = 2,
   });
+
+  /// Stricter defaults for automatic background passes.
+  static const automatic = SegmenterConfig();
+
+  /// Looser thresholds when the user taps "Find visits".
+  static const manual = SegmenterConfig(
+    visitRadiusM: 120,
+    minVisitDuration: Duration(minutes: 2),
+    minTripDistanceM: 40,
+    minPointsPerVisit: 1,
+  );
 
   final double visitRadiusM;
   final Duration minVisitDuration;
   final double minTripDistanceM;
+  final int minPointsPerVisit;
 }
 
 class PointInput {
@@ -81,7 +94,7 @@ class SegmenterResult {
 
 /// Pure segmenter: raw points → visits + trips (docs/02).
 class Segmenter {
-  const Segmenter({this.config = const SegmenterConfig()});
+  const Segmenter({this.config = SegmenterConfig.automatic});
 
   final SegmenterConfig config;
 
@@ -117,11 +130,25 @@ class Segmenter {
       }
 
       final startAt = cluster.first.recordedAt;
-      final endAt = cluster.last.recordedAt;
+      var endAt = cluster.last.recordedAt;
+      // Single-point cluster: extend end toward the next sample (or +2 min)
+      // so a sparse trail can still form a visit on a manual pass.
+      if (cluster.length == 1 && config.minPointsPerVisit <= 1) {
+        if (j < sorted.length) {
+          final gap = sorted[j].recordedAt - startAt;
+          if (gap >= config.minVisitDuration.inMilliseconds) {
+            endAt = startAt + config.minVisitDuration.inMilliseconds;
+          }
+        } else {
+          // Last point in the batch — treat as a short stay if manual.
+          endAt = startAt + config.minVisitDuration.inMilliseconds;
+        }
+      }
+
       final durationMs = endAt - startAt;
 
       if (durationMs >= config.minVisitDuration.inMilliseconds &&
-          cluster.length >= 2) {
+          cluster.length >= config.minPointsPerVisit) {
         visits.add(
           VisitDraft(
             startAt: startAt,
@@ -135,8 +162,6 @@ class Segmenter {
         );
         processed.addAll(cluster.map((p) => p.id));
       }
-      // Non-visit clusters stay unprocessed until more points arrive or
-      // end-of-day pass with lower thresholds (later).
 
       i = j > i ? j : i + 1;
     }

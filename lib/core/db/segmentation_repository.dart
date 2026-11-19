@@ -5,6 +5,20 @@ import '../../domain/segmentation/segmenter.dart';
 import '../../domain/timeline/timeline_entry.dart';
 import 'app_database.dart';
 
+class SegmentationRunResult {
+  const SegmentationRunResult({
+    required this.visitsCreated,
+    required this.tripsCreated,
+    required this.unprocessedBefore,
+    required this.pointsConsumed,
+  });
+
+  final int visitsCreated;
+  final int tripsCreated;
+  final int unprocessedBefore;
+  final int pointsConsumed;
+}
+
 class SegmentationRepository {
   SegmentationRepository(this._db, {Segmenter? segmenter})
       : _segmenter = segmenter ?? const Segmenter();
@@ -14,14 +28,22 @@ class SegmentationRepository {
   final _uuid = const Uuid();
 
   /// Run segmenter on unprocessed points and persist visits/trips.
-  /// Returns number of new visits written.
-  Future<int> runOnce() async {
+  ///
+  /// [manual] uses relaxed thresholds (user tapped Find visits / refresh).
+  Future<SegmentationRunResult> runOnce({bool manual = false}) async {
     final unprocessed = await (_db.select(_db.rawPoints)
           ..where((t) => t.processed.equals(false))
           ..orderBy([(t) => OrderingTerm.asc(t.recordedAt)]))
         .get();
 
-    if (unprocessed.isEmpty) return 0;
+    if (unprocessed.isEmpty) {
+      return const SegmentationRunResult(
+        visitsCreated: 0,
+        tripsCreated: 0,
+        unprocessedBefore: 0,
+        pointsConsumed: 0,
+      );
+    }
 
     final inputs = unprocessed
         .map(
@@ -35,8 +57,19 @@ class SegmentationRepository {
         )
         .toList();
 
-    final result = _segmenter.run(inputs);
-    if (result.visits.isEmpty) return 0;
+    final segmenter = manual
+        ? const Segmenter(config: SegmenterConfig.manual)
+        : _segmenter;
+    final result = segmenter.run(inputs);
+
+    if (result.visits.isEmpty) {
+      return SegmentationRunResult(
+        visitsCreated: 0,
+        tripsCreated: 0,
+        unprocessedBefore: unprocessed.length,
+        pointsConsumed: 0,
+      );
+    }
 
     final now = DateTime.now().toUtc().millisecondsSinceEpoch;
     final visitIds = <String>[];
@@ -83,7 +116,12 @@ class SegmentationRepository {
       }
     });
 
-    return result.visits.length;
+    return SegmentationRunResult(
+      visitsCreated: result.visits.length,
+      tripsCreated: result.trips.length,
+      unprocessedBefore: unprocessed.length,
+      pointsConsumed: result.processedPointIds.length,
+    );
   }
 
   Stream<List<Visit>> watchVisitsForDay(DateTime localDay) {
@@ -114,7 +152,6 @@ class SegmentationRepository {
         .watch();
   }
 
-  /// Local day numbers in [month] that have at least one visit (for calendar dots).
   Stream<Set<int>> watchVisitDaysInMonth(DateTime month) {
     final start = DateTime(month.year, month.month);
     final end = DateTime(month.year, month.month + 1);
@@ -144,7 +181,6 @@ class SegmentationRepository {
     });
   }
 
-  /// Visits and trips for a local day, ordered by start time.
   Stream<List<TimelineEntry>> watchTimelineForDay(DateTime localDay) {
     return watchVisitsForDay(localDay).asyncExpand((visits) {
       return watchTripsForDay(localDay).map((trips) {
@@ -163,7 +199,6 @@ class SegmentationRepository {
     return query.getSingleOrNull();
   }
 
-  /// Attach a place to a visit and protect it from auto-relabel.
   Future<void> attachPlace({
     required String visitId,
     required String placeId,
