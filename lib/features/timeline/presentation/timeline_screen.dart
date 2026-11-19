@@ -66,6 +66,14 @@ class TimelineScreen extends ConsumerWidget {
     };
   }
 
+  Future<void> _findVisits(BuildContext context, WidgetRef ref) async {
+    final msg = await runSegmentation(ref);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(trackingSessionProvider);
@@ -104,9 +112,9 @@ class TimelineScreen extends ConsumerWidget {
         title: const Text('Timeline'),
         actions: [
           IconButton(
-            tooltip: 'Refresh visits',
+            tooltip: 'Find visits',
             icon: const Icon(Icons.refresh),
-            onPressed: () => runSegmentation(ref),
+            onPressed: () => _findVisits(context, ref),
           ),
           if (status == TrackingStatus.on || status == TrackingStatus.paused)
             IconButton(
@@ -324,11 +332,11 @@ class TimelineScreen extends ConsumerWidget {
                     ? 'Recording'
                     : 'Tracking paused',
                 message: status == TrackingStatus.on
-                    ? 'Stay in one place for about 10 minutes to form a visit, '
-                        'or pull refresh after you have moved around.'
+                    ? 'Stay in one place a few minutes, then tap Find visits. '
+                        'Automatic visits use ~10 minutes; Find visits is more lenient.'
                     : 'Tap play in the app bar to resume.',
                 actionLabel: 'Find visits',
-                onAction: () => runSegmentation(ref),
+                onAction: () => _findVisits(context, ref),
               )
             else if (snap != null && snap.hasForeground)
               EmptyState(
@@ -336,13 +344,13 @@ class TimelineScreen extends ConsumerWidget {
                 title:
                     count > 0 ? 'No visits yet today' : 'Nothing recorded yet',
                 message: count > 0
-                    ? 'You have points saved. Visits appear after ~10 minutes '
-                        'in one place. Tap refresh or start tracking again.'
-                    : 'When tracking is on, places you stay become visits here.',
+                    ? 'You have points saved. Tap Find visits to turn them into '
+                        'places (about 2 minutes in one spot is enough).'
+                    : 'When tracking is on, the places you stay become visits here.',
                 actionLabel: count > 0 ? 'Find visits' : 'Start tracking',
                 onAction: () async {
                   if (count > 0) {
-                    await runSegmentation(ref);
+                    await _findVisits(context, ref);
                     return;
                   }
                   if (!disclosureShown &&
