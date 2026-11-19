@@ -27,7 +27,6 @@ class _DataScreenState extends ConsumerState<DataScreen> {
     final svc = ref.read(dataControlServiceProvider);
     await svc.purgeExpiredRawPoints();
     final counts = _Counts(
-      points: await svc.rawPointCount(),
       visits: await svc.visitCount(),
       trips: await svc.tripCount(),
       events: await svc.eventCount(),
@@ -73,7 +72,6 @@ class _DataScreenState extends ConsumerState<DataScreen> {
       ref.invalidate(todaysTimelineProvider);
       ref.invalidate(todaysVisitsProvider);
       ref.invalidate(placesByIdProvider);
-      ref.invalidate(rawPointCountProvider);
     }, 'All local data deleted');
   }
 
@@ -94,11 +92,6 @@ class _DataScreenState extends ConsumerState<DataScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    title: const Text('Raw points'),
-                    trailing: Text('${c?.points ?? '…'}'),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
                     title: const Text('Visits'),
                     trailing: Text('${c?.visits ?? '…'}'),
                   ),
@@ -114,12 +107,13 @@ class _DataScreenState extends ConsumerState<DataScreen> {
                   ),
                   const Divider(height: 1),
                   ListTile(
-                    title: const Text('Raw point retention'),
+                    title: const Text('History cleanup'),
                     subtitle: Text(
                       c == null
                           ? '…'
-                          : 'Older than ${c.retentionDays} days are removed. '
-                              'Visits and trips are kept. Change this under Tracking.',
+                          : 'Detailed tracking history older than '
+                              '${c.retentionDays} days is removed automatically. '
+                              'Visits and trips stay. Change under Tracking.',
                     ),
                   ),
                 ],
@@ -135,7 +129,7 @@ class _DataScreenState extends ConsumerState<DataScreen> {
                     leading: const Icon(Icons.description_outlined),
                     title: const Text('Export JSON'),
                     subtitle: const Text(
-                      'Visits, trips, places, events, points and settings.',
+                      'Visits, trips, places, events and settings.',
                     ),
                     enabled: !_busy,
                     onTap: () => _run(
@@ -219,8 +213,8 @@ class _DeleteConfirmDialogState extends State<_DeleteConfirmDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'This removes visits, trips, places, raw points, events and '
-            'weather cache on this phone. Theme and tracking settings stay.\n\n'
+            'This removes visits, trips, places, events and weather cache '
+            'on this phone. Theme and tracking settings stay.\n\n'
             'Type DELETE to confirm.',
           ),
           const SizedBox(height: 16),
@@ -254,14 +248,12 @@ class _DeleteConfirmDialogState extends State<_DeleteConfirmDialog> {
 
 class _Counts {
   const _Counts({
-    required this.points,
     required this.visits,
     required this.trips,
     required this.events,
     required this.retentionDays,
   });
 
-  final int points;
   final int visits;
   final int trips;
   final int events;
