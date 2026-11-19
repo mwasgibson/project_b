@@ -16,7 +16,7 @@ import '../../../domain/tracking/location_tracker.dart';
 import '../../tracking/tracking_providers.dart';
 import 'visit_detail_sheet.dart';
 
-/// S5 — tracking controls + today's visits and trips.
+/// S5 — tracking controls + today's story (visits, trips, gaps).
 class TimelineScreen extends ConsumerWidget {
   const TimelineScreen({super.key});
 
@@ -66,6 +66,13 @@ class TimelineScreen extends ConsumerWidget {
     };
   }
 
+  static String _gapLabel(String reason) => switch (reason) {
+        'paused' => 'Tracking paused',
+        'permission' => 'Location not available',
+        'off' => 'Tracking was off',
+        _ => 'No location data',
+      };
+
   Future<void> _findVisits(BuildContext context, WidgetRef ref) async {
     final msg = await runSegmentation(ref);
     if (!context.mounted) return;
@@ -82,7 +89,6 @@ class TimelineScreen extends ConsumerWidget {
     final disclosure = ref.watch(backgroundDisclosureShownProvider);
     final trackingPref = ref.watch(trackingEnabledProvider);
     final engineStatus = ref.watch(trackingStatusProvider);
-    final pointCount = ref.watch(rawPointCountProvider);
     final modeSetting = ref.watch(trackingModeSettingProvider);
     final timelineAsync = ref.watch(todaysTimelineProvider);
     final placesMap = ref.watch(placesByIdProvider).valueOrNull ?? {};
@@ -97,8 +103,6 @@ class TimelineScreen extends ConsumerWidget {
       engine: engine,
       trackingEnabled: trackingEnabled,
     );
-    final count = pointCount.valueOrNull ?? 0;
-    final lastAt = session.tracker.lastPointAt;
     final entries = timelineAsync.valueOrNull ?? const <TimelineEntry>[];
     final visitCount =
         entries.where((e) => e.kind == TimelineEntryKind.visit).length;
@@ -106,13 +110,14 @@ class TimelineScreen extends ConsumerWidget {
         entries.where((e) => e.kind == TimelineEntryKind.trip).length;
     final timeFmt = DateFormat.Hm();
     final domain = context.domainColors;
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Timeline'),
         actions: [
           IconButton(
-            tooltip: 'Find visits',
+            tooltip: 'Refresh timeline',
             icon: const Icon(Icons.refresh),
             onPressed: () => _findVisits(context, ref),
           ),
@@ -134,16 +139,11 @@ class TimelineScreen extends ConsumerWidget {
               icon: const Icon(Icons.stop_circle_outlined),
               onPressed: () => session.stop(),
             ),
-          IconButton(
-            tooltip: 'Tracking settings',
-            icon: const Icon(Icons.tune),
-            onPressed: () => context.push(Routes.trackingSettings),
-          ),
         ],
       ),
       body: ContentWidth(
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
             Align(
               alignment: Alignment.centerLeft,
@@ -153,34 +153,17 @@ class TimelineScreen extends ConsumerWidget {
                 onTap: () => context.push(Routes.trackingSettings),
               ),
             ),
-            if (count > 0 || lastAt != null || entries.isNotEmpty) ...[
+            if (visitCount > 0 || tripCount > 0) ...[
               const SizedBox(height: 12),
-              InkWell(
-                onTap: count > 0 ? () => context.push(Routes.points) : null,
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(
-                    [
-                      if (count > 0) '$count point${count == 1 ? '' : 's'}',
-                      if (visitCount > 0)
-                        '$visitCount visit${visitCount == 1 ? '' : 's'}',
-                      if (tripCount > 0)
-                        '$tripCount trip${tripCount == 1 ? '' : 's'}',
-                      if (lastAt != null)
-                        'Last: ${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(lastAt, isUtc: true).toLocal())}',
-                    ].join(' · '),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant,
-                          decoration: count > 0
-                              ? TextDecoration.underline
-                              : null,
-                          decorationColor: Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant,
-                        ),
-                  ),
+              Text(
+                [
+                  if (visitCount > 0)
+                    '$visitCount place${visitCount == 1 ? '' : 's'}',
+                  if (tripCount > 0)
+                    '$tripCount trip${tripCount == 1 ? '' : 's'}',
+                ].join(' · '),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -192,25 +175,23 @@ class TimelineScreen extends ConsumerWidget {
                   return Padding(
                     padding: const EdgeInsets.only(top: 12),
                     child: Material(
-                      color: Theme.of(context).colorScheme.errorContainer,
+                      color: theme.colorScheme.errorContainer,
                       borderRadius: BorderRadius.circular(12),
                       child: ListTile(
                         leading: Icon(
                           Icons.warning_amber_rounded,
-                          color: Theme.of(context).colorScheme.onErrorContainer,
+                          color: theme.colorScheme.onErrorContainer,
                         ),
                         title: Text(
-                          'No points for over 30 minutes',
+                          'No location for over 30 minutes',
                           style: TextStyle(
-                            color:
-                                Theme.of(context).colorScheme.onErrorContainer,
+                            color: theme.colorScheme.onErrorContainer,
                           ),
                         ),
                         subtitle: Text(
                           'Some phones limit background apps. Check the battery tip.',
                           style: TextStyle(
-                            color:
-                                Theme.of(context).colorScheme.onErrorContainer,
+                            color: theme.colorScheme.onErrorContainer,
                           ),
                         ),
                         onTap: () => context.push(Routes.keepAlive),
@@ -219,7 +200,7 @@ class TimelineScreen extends ConsumerWidget {
                   );
                 },
               ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             if (snap != null && !snap.serviceEnabled)
               _PermissionCard(
                 title: 'Location services are off',
@@ -279,96 +260,57 @@ class TimelineScreen extends ConsumerWidget {
                     .openSystemAppSettings(),
               )
             else if (entries.isNotEmpty) ...[
-              Text(
-                'Today',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              for (final entry in entries)
-                if (entry.kind == TimelineEntryKind.visit)
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      leading: Icon(
-                        Icons.place_outlined,
-                        color: domain.visit,
-                      ),
-                      title: Text(_visitTitle(entry.visit!, placesMap)),
-                      subtitle: Text(
-                        '${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(entry.visit!.startAt, isUtc: true).toLocal())}'
-                        ' – '
-                        '${entry.visit!.endAt == null ? 'now' : timeFmt.format(DateTime.fromMillisecondsSinceEpoch(entry.visit!.endAt!, isUtc: true).toLocal())}'
-                        ' · ${_formatDuration(entry.visit!.startAt, entry.visit!.endAt)}',
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => VisitDetailSheet.show(
-                        context,
-                        entry.visit!,
-                        place: entry.visit!.placeId == null
-                            ? null
-                            : placesMap[entry.visit!.placeId!],
-                      ),
-                    ),
-                  )
-                else
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      leading: Icon(
-                        Icons.directions_outlined,
-                        color: domain.trip,
-                      ),
-                      title: const Text('Trip'),
-                      subtitle: Text(
-                        [
-                          '${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(entry.trip!.startAt, isUtc: true).toLocal())}'
-                              ' – '
-                              '${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(entry.trip!.endAt, isUtc: true).toLocal())}',
-                          _formatDuration(
-                            entry.trip!.startAt,
-                            entry.trip!.endAt,
-                          ),
-                          if (entry.trip!.distanceM != null)
-                            _formatDistance(entry.trip!.distanceM),
-                        ].join(' · '),
-                      ),
-                    ),
+              Text('Today', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 12),
+              for (var i = 0; i < entries.length; i++)
+                _TimelineRow(
+                  entry: entries[i],
+                  isFirst: i == 0,
+                  isLast: i == entries.length - 1,
+                  timeFmt: timeFmt,
+                  placesMap: placesMap,
+                  domain: domain,
+                  formatDuration: _formatDuration,
+                  formatDistance: _formatDistance,
+                  visitTitle: _visitTitle,
+                  gapLabel: _gapLabel,
+                  onVisitTap: (v) => VisitDetailSheet.show(
+                    context,
+                    v,
+                    place: v.placeId == null ? null : placesMap[v.placeId!],
                   ),
+                ),
               if (status != TrackingStatus.on &&
                   status != TrackingStatus.paused)
-                TextButton(
-                  onPressed: () => session.start(mode),
-                  child: const Text('Start tracking'),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: TextButton(
+                    onPressed: () => session.start(mode),
+                    child: const Text('Start tracking'),
+                  ),
                 ),
             ] else if (status == TrackingStatus.on ||
                 status == TrackingStatus.paused)
               EmptyState(
                 icon: Icons.route_outlined,
                 title: status == TrackingStatus.on
-                    ? 'Recording'
+                    ? 'Recording your day'
                     : 'Tracking paused',
                 message: status == TrackingStatus.on
-                    ? 'Stay in one place a few minutes, then tap Find visits. '
-                        'Automatic visits use ~10 minutes; Find visits is more lenient.'
-                    : 'Tap play in the app bar to resume, or stop tracking fully.',
-                actionLabel: 'Find visits',
+                    ? 'Stay somewhere a few minutes, then pull refresh. '
+                        'Same places stay as one visit even if you pause.'
+                    : 'Tap play to resume, or stop tracking fully.',
+                actionLabel: 'Refresh timeline',
                 onAction: () => _findVisits(context, ref),
               )
             else if (snap != null && snap.hasForeground)
               EmptyState(
                 icon: Icons.route_outlined,
-                title:
-                    count > 0 ? 'No visits yet today' : 'Nothing recorded yet',
-                message: count > 0
-                    ? 'You have points saved. Tap Find visits to turn them into '
-                        'places (about 2 minutes in one spot is enough).'
-                    : 'When tracking is on, the places you stay become visits here.',
-                actionLabel: count > 0 ? 'Find visits' : 'Start tracking',
+                title: 'Nothing recorded yet',
+                message:
+                    'When tracking is on, the places you stay become visits here.',
+                actionLabel: 'Start tracking',
                 onAction: () async {
-                  if (count > 0) {
-                    await _findVisits(context, ref);
-                    return;
-                  }
                   if (!disclosureShown &&
                       snap.hasForeground &&
                       !snap.hasBackground) {
@@ -387,6 +329,184 @@ class TimelineScreen extends ConsumerWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _TimelineRow extends StatelessWidget {
+  const _TimelineRow({
+    required this.entry,
+    required this.isFirst,
+    required this.isLast,
+    required this.timeFmt,
+    required this.placesMap,
+    required this.domain,
+    required this.formatDuration,
+    required this.formatDistance,
+    required this.visitTitle,
+    required this.gapLabel,
+    required this.onVisitTap,
+  });
+
+  final TimelineEntry entry;
+  final bool isFirst;
+  final bool isLast;
+  final DateFormat timeFmt;
+  final Map<String, Place> placesMap;
+  final DomainColors domain;
+  final String Function(int, int?) formatDuration;
+  final String Function(double?) formatDistance;
+  final String Function(Visit, Map<String, Place>) visitTitle;
+  final String Function(String) gapLabel;
+  final void Function(Visit) onVisitTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final Color railColor;
+    final IconData icon;
+    final String title;
+    final String subtitle;
+    final VoidCallback? onTap;
+
+    switch (entry.kind) {
+      case TimelineEntryKind.visit:
+        final v = entry.visit!;
+        railColor = domain.visit;
+        icon = Icons.place;
+        title = visitTitle(v, placesMap);
+        subtitle =
+            '${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(v.startAt, isUtc: true).toLocal())}'
+            ' – '
+            '${v.endAt == null ? 'now' : timeFmt.format(DateTime.fromMillisecondsSinceEpoch(v.endAt!, isUtc: true).toLocal())}'
+            ' · ${formatDuration(v.startAt, v.endAt)}';
+        onTap = () => onVisitTap(v);
+      case TimelineEntryKind.trip:
+        final t = entry.trip!;
+        railColor = domain.trip;
+        icon = Icons.directions;
+        title = 'Trip';
+        subtitle = [
+          '${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(t.startAt, isUtc: true).toLocal())}'
+              ' – '
+              '${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(t.endAt, isUtc: true).toLocal())}',
+          formatDuration(t.startAt, t.endAt),
+          if (t.distanceM != null) formatDistance(t.distanceM),
+        ].join(' · ');
+        onTap = null;
+      case TimelineEntryKind.gap:
+        final g = entry.gap!;
+        railColor = domain.gap;
+        icon = Icons.more_horiz;
+        title = gapLabel(g.reason);
+        subtitle =
+            '${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(g.startAt, isUtc: true).toLocal())}'
+            ' – '
+            '${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(g.endAt, isUtc: true).toLocal())}'
+            ' · ${formatDuration(g.startAt, g.endAt)}';
+        onTap = null;
+    }
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 28,
+            child: Column(
+              children: [
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    color: isFirst
+                        ? Colors.transparent
+                        : railColor.withValues(alpha: 0.35),
+                  ),
+                ),
+                Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: railColor, width: 2),
+                  ),
+                  child: Icon(icon, size: 12, color: railColor),
+                ),
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    color: isLast
+                        ? Colors.transparent
+                        : railColor.withValues(alpha: 0.35),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Material(
+                color: entry.kind == TimelineEntryKind.gap
+                    ? theme.colorScheme.surfaceContainerHighest
+                    : theme.colorScheme.surfaceContainerLowest,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: theme.colorScheme.outlineVariant,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: entry.kind == TimelineEntryKind.gap
+                                      ? theme.colorScheme.onSurfaceVariant
+                                      : null,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                subtitle,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (onTap != null)
+                          Icon(
+                            Icons.chevron_right,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

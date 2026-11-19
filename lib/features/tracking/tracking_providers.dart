@@ -76,10 +76,6 @@ final rawPointCountProvider = StreamProvider<int>((ref) {
   return ref.watch(rawPointsRepositoryProvider).watchCount();
 });
 
-final recentRawPointsProvider = StreamProvider((ref) {
-  return ref.watch(rawPointsRepositoryProvider).watchRecent(limit: 200);
-});
-
 final deletedVisitsProvider = StreamProvider((ref) {
   return ref.watch(segmentationRepositoryProvider).watchDeletedVisits();
 });
@@ -91,13 +87,18 @@ final placesByIdProvider = FutureProvider<Map<String, Place>>((ref) async {
 
 final todaysTimelineProvider = StreamProvider<List<TimelineEntry>>((ref) {
   final repo = ref.watch(segmentationRepositoryProvider);
+  final gaps = ref.watch(gapsRepositoryProvider);
   final labels = ref.watch(placeLabelServiceProvider);
   () async {
     await repo.runOnce(manual: false);
     await labels.processPending();
     ref.invalidate(placesByIdProvider);
   }();
-  return repo.watchTimelineForDay(DateTime.now());
+  final day = DateTime.now();
+  return repo.watchTimelineForDay(
+    day,
+    gapsStream: gaps.watchForDay(day),
+  );
 });
 
 final todaysVisitsProvider = StreamProvider((ref) {
@@ -153,26 +154,22 @@ Future<String> runSegmentation(WidgetRef ref) async {
   ref.invalidate(todaysTimelineProvider);
   ref.invalidate(todaysVisitsProvider);
   ref.invalidate(placesByIdProvider);
-  ref.invalidate(rawPointCountProvider);
 
   if (result.visitsCreated == 0 && result.visitsMerged > 0) {
-    return 'Merged ${result.visitsMerged} overlapping visit'
+    return 'Merged ${result.visitsMerged} same-place visit'
         '${result.visitsMerged == 1 ? '' : 's'}';
   }
   if (result.unprocessedBefore == 0 && result.visitsMerged == 0) {
-    return 'No new points to process';
+    return 'Nothing new to process';
   }
   if (result.visitsCreated == 0) {
-    return 'No visits yet from ${result.unprocessedBefore} point'
-        '${result.unprocessedBefore == 1 ? '' : 's'} '
-        '(need ~2 min in one place)';
+    return 'No visits yet — stay in one place a couple of minutes, then try again';
   }
   final parts = <String>[
     '${result.visitsCreated} visit${result.visitsCreated == 1 ? '' : 's'}',
     if (result.tripsCreated > 0)
       '${result.tripsCreated} trip${result.tripsCreated == 1 ? '' : 's'}',
-    if (result.visitsMerged > 0)
-      'merged ${result.visitsMerged}',
+    if (result.visitsMerged > 0) 'merged ${result.visitsMerged}',
   ];
   return 'Found ${parts.join(' · ')}';
 }
