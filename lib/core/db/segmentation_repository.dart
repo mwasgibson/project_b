@@ -31,7 +31,6 @@ class SegmentationRepository {
   final Segmenter _segmenter;
   final _uuid = const Uuid();
 
-  /// Same place, short gap → one visit (fixes multi-hour stays split by GPS noise).
   static const _mergeRadiusM = 150.0;
   static const _mergeMaxGap = Duration(hours: 2);
 
@@ -136,90 +135,84 @@ class SegmentationRepository {
     );
   }
 
-  /// Collapse consecutive same-place visits into one.
+  /// Collapse consecutive same-place visits (GPS jitter / batch splits).
   Future<int> mergeNearbyVisits() async {
-    final visits = await (_db.select(_db.visits)
-          ..where((t) => t.deleted.equals(false))
-          ..orderBy([(t) => OrderingTerm.asc(t.startAt)]))
-        .get();
+    var totalMerged = 0;
 
-    if (visits.length < 2) return 0;
+    while (true) {
+      final visits = await (_db.select(_db.visits)
+            ..where((t) => t.deleted.equals(false))
+            ..orderBy([(t) => OrderingTerm.asc(t.startAt)]))
+          .get();
 
-    var merged = 0;
-    var i = 0;
-    while (i < visits.length - 1) {
-      final a = visits[i];
-      final b = visits[i + 1];
-      final aEnd = a.endAt ?? a.startAt;
-      final gap = b.startAt - aEnd;
-      final dist = _haversineM(a.lat, a.lng, b.lat, b.lng);
-      final samePlace = a.placeId != null &&
-          b.placeId != null &&
-          a.placeId == b.placeId;
+      if (visits.length < 2) break;
 
-      final canMerge = gap >= 0 &&
-          gap <= _mergeMaxGap.inMilliseconds &&
-          (dist <= _mergeRadiusM || samePlace) &&
-          !a.userEdited &&
-          !b.userEdited;
+      var mergedThisPass = false;
 
-      if (!canMerge) {
-        i++;
-        continue;
+      for (var i = 0; i < visits.length - 1; i++) {
+        final a = visits[i];
+        final b = visits[i + 1];
+        final aEnd = a.endAt ?? a.startAt;
+        final gap = b.startAt - aEnd;
+        final dist = _haversineM(a.lat, a.lng, b.lat, b.lng);
+        final samePlace = a.placeId != null &&
+            b.placeId != null &&
+            a.placeId == b.placeId;
+
+        final canMerge = gap >= 0 &&
+            gap <= _mergeMaxGap.inMilliseconds &&
+            (dist <= _mergeRadiusM || samePlace) &&
+            !a.userEdited &&
+            !b.userEdited;
+
+        if (!canMerge) continue;
+
+        final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+        final newEnd = math.max(aEnd, b.endAt ?? b.startAt);
+        final pts = (a.pointCount ?? 0) + (b.pointCount ?? 0);
+        final placeId = a.placeId ?? b.placeId;
+
+        await _db.transaction(() async {
+          await (_db.update(_db.visits)..where((t) => t.id.equals(a.id))).write(
+                VisitsCompanion(
+                  endAt: Value(newEnd),
+                  lat: Value((a.lat + b.lat) / 2),
+                  lng: Value((a.lng + b.lng) / 2),
+                  pointCount: Value(pts),
+                  placeId: Value(placeId),
+                  updatedAt: Value(now),
+                ),
+              );
+
+          await (_db.update(_db.visits)..where((t) => t.id.equals(b.id))).write(
+                VisitsCompanion(
+                  deleted: const Value(true),
+                  updatedAt: Value(now),
+                ),
+              );
+
+          await (_db.update(_db.trips)
+                ..where(
+                  (t) =>
+                      t.fromVisitId.equals(b.id) | t.toVisitId.equals(b.id),
+                ))
+              .write(
+            TripsCompanion(
+              deleted: const Value(true),
+              updatedAt: Value(now),
+            ),
+          );
+        });
+
+        totalMerged++;
+        mergedThisPass = true;
+        break; // restart scan after structural change
       }
 
-      final now = DateTime.now().toUtc().millisecondsSinceEpoch;
-      final newEnd = math.max(aEnd, b.endAt ?? b.startAt);
-      final pts = (a.pointCount ?? 0) + (b.pointCount ?? 0);
-      final placeId = a.placeId ?? b.placeId;
-
-      await _db.transaction(() async {
-        await (_db.update(_db.visits)..where((t) => t.id.equals(a.id))).write(
-              VisitsCompanion(
-                endAt: Value(newEnd),
-                lat: Value((a.lat + b.lat) / 2),
-                lng: Value((a.lng + b.lng) / 2),
-                pointCount: Value(pts),
-                placeId: Value(placeId),
-                updatedAt: Value(now),
-              ),
-            );
-
-        // Soft-delete the second visit and trips that only bridged a→b.
-        await (_db.update(_db.visits)..where((t) => t.id.equals(b.id))).write(
-              VisitsCompanion(
-                deleted: const Value(true),
-                updatedAt: Value(now),
-              ),
-            );
-
-        await (_db.update(_db.trips)
-              ..where(
-                (t) =>
-                    (t.fromVisitId.equals(a.id) & t.toVisitId.equals(b.id)) |
-                    (t.fromVisitId.equals(b.id) | t.toVisitId.equals(b.id)),
-              ))
-            .write(
-          TripsCompanion(
-            deleted: const Value(true),
-            updatedAt: Value(now),
-          ),
-        );
-      });
-
-      // Refresh list and stay on index i to chain further merges.
-      visits.removeAt(i + 1);
-      visits[i] = a.copyWith(
-        endAt: Value(newEnd),
-        lat: (a.lat + b.lat) / 2,
-        lng: (a.lng + b.lng) / 2,
-        pointCount: Value(pts),
-        placeId: Value(placeId),
-      );
-      merged++;
+      if (!mergedThisPass) break;
     }
 
-    return merged;
+    return totalMerged;
   }
 
   Stream<List<Visit>> watchVisitsForDay(DateTime localDay) {
