@@ -30,7 +30,6 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(themeModeProvider).value ?? ThemeMode.system;
     final tracking = ref.watch(trackingStatusProvider).valueOrNull;
-    final points = ref.watch(rawPointCountProvider).valueOrNull ?? 0;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -63,14 +62,6 @@ class SettingsScreen extends ConsumerWidget {
                     subtitle: const Text('Named locations from your visits'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => context.push(Routes.places),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.bubble_chart_outlined),
-                    title: const Text('Saved points'),
-                    subtitle: Text('$points on this phone'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push(Routes.points),
                   ),
                   const Divider(height: 1),
                   ListTile(

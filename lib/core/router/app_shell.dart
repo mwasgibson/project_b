@@ -9,36 +9,52 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       body: shell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: shell.currentIndex,
-        onDestinationSelected: (index) => shell.goBranch(
-          index,
-          initialLocation: index == shell.currentIndex,
+      bottomNavigationBar: Material(
+        color: theme.colorScheme.surfaceContainerLowest,
+        elevation: 0,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: theme.colorScheme.outlineVariant,
+            ),
+            NavigationBar(
+              selectedIndex: shell.currentIndex,
+              onDestinationSelected: (index) => shell.goBranch(
+                index,
+                initialLocation: index == shell.currentIndex,
+              ),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.timeline_outlined),
+                  selectedIcon: Icon(Icons.timeline),
+                  label: 'Timeline',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.calendar_month_outlined),
+                  selectedIcon: Icon(Icons.calendar_month),
+                  label: 'Calendar',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.wb_cloudy_outlined),
+                  selectedIcon: Icon(Icons.wb_cloudy),
+                  label: 'Weather',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings),
+                  label: 'Settings',
+                ),
+              ],
+            ),
+          ],
         ),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.timeline_outlined),
-            selectedIcon: Icon(Icons.timeline),
-            label: 'Timeline',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.calendar_month_outlined),
-            selectedIcon: Icon(Icons.calendar_month),
-            label: 'Calendar',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.wb_cloudy_outlined),
-            selectedIcon: Icon(Icons.wb_cloudy),
-            label: 'Weather',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-        ],
       ),
     );
   }

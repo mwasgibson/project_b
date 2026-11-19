@@ -11,7 +11,6 @@ import '../../features/settings/presentation/appearance_screen.dart';
 import '../../features/settings/presentation/data_screen.dart';
 import '../../features/settings/presentation/keep_alive_screen.dart';
 import '../../features/settings/presentation/places_screen.dart';
-import '../../features/settings/presentation/points_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/settings/presentation/tracking_settings_screen.dart';
 import '../../features/settings/presentation/trash_screen.dart';
@@ -34,7 +33,6 @@ abstract final class Routes {
   static const trackingSettings = '/settings/tracking';
   static const data = '/settings/data';
   static const places = '/settings/places';
-  static const points = '/settings/points';
   static const trash = '/settings/trash';
   static const keepAlive = '/help/keep-alive';
 }
@@ -150,10 +148,6 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'places',
                     builder: (context, state) => const PlacesScreen(),
-                  ),
-                  GoRoute(
-                    path: 'points',
-                    builder: (context, state) => const PointsScreen(),
                   ),
                   GoRoute(
                     path: 'trash',

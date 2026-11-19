@@ -165,17 +165,6 @@ class VisitDetailSheet extends ConsumerWidget {
               label: 'Duration',
               value: _duration(visit.startAt, visit.endAt),
             ),
-            _Row(
-              icon: Icons.my_location_outlined,
-              label: 'Coordinates',
-              value:
-                  '${visit.lat.toStringAsFixed(5)}, ${visit.lng.toStringAsFixed(5)}',
-            ),
-            _Row(
-              icon: Icons.bubble_chart_outlined,
-              label: 'Points',
-              value: '${visit.pointCount ?? 0}',
-            ),
             const SizedBox(height: 16),
             FilledButton.tonalIcon(
               onPressed: () => _rename(context, ref),

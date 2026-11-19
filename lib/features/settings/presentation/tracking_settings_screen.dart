@@ -10,7 +10,7 @@ import '../../../domain/tracking/location_tracker.dart';
 import '../../data/data_control_providers.dart';
 import '../../tracking/tracking_providers.dart';
 
-/// S14 — on/off, mode, auto-saver, auto-label, retention, last point, battery tip.
+/// S14 — on/off, mode, auto-saver, auto-label, retention, last update, battery tip.
 class TrackingSettingsScreen extends ConsumerWidget {
   const TrackingSettingsScreen({super.key});
 
@@ -21,10 +21,9 @@ class TrackingSettingsScreen extends ConsumerWidget {
       };
 
   static String _modeSubtitle(TrackingMode mode) => switch (mode) {
-        TrackingMode.high => 'More points, higher battery use (~10 m).',
-        TrackingMode.balanced =>
-          'Default. Good accuracy, moderate battery (~25 m).',
-        TrackingMode.saver => 'Fewer updates, lightest on battery (~75 m).',
+        TrackingMode.high => 'More detail, higher battery use.',
+        TrackingMode.balanced => 'Default. Good balance of detail and battery.',
+        TrackingMode.saver => 'Fewer updates, lightest on battery.',
       };
 
   static String _statusLabel(TrackingStatus status) => switch (status) {
@@ -41,7 +40,6 @@ class TrackingSettingsScreen extends ConsumerWidget {
         TrackingMode.balanced;
     final status = ref.watch(trackingStatusProvider).valueOrNull ??
         TrackingStatus.off;
-    final count = ref.watch(rawPointCountProvider).valueOrNull ?? 0;
     final autoSaver = ref.watch(autoSaverEnabledProvider).valueOrNull ?? true;
     final level = ref.watch(autoSaverLevelProvider).valueOrNull ?? 20;
     final autoLabel = ref.watch(autoLabelEnabledProvider).valueOrNull ?? true;
@@ -78,7 +76,7 @@ class TrackingSettingsScreen extends ConsumerWidget {
                     ListTile(
                       title: const Text('Pause'),
                       subtitle: const Text(
-                        'Stops recording temporarily without turning tracking off.',
+                        'Stops recording temporarily. Same place stays one visit when you resume.',
                       ),
                       trailing: const Icon(Icons.pause_circle_outline),
                       onTap: () => session.pause(),
@@ -210,15 +208,15 @@ class TrackingSettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              'Raw point retention',
+              'History retention',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             Card(
               child: ListTile(
-                title: const Text('Keep raw points for'),
+                title: const Text('Keep detailed history for'),
                 subtitle: Text(
-                  '$retention days. Visits and trips are not deleted by this.',
+                  '$retention days. Your visits and trips are kept longer.',
                 ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -234,7 +232,6 @@ class TrackingSettingsScreen extends ConsumerWidget {
                                   .read(dataControlServiceProvider)
                                   .purgeExpiredRawPoints();
                               ref.invalidate(rawRetentionDaysProvider);
-                              ref.invalidate(rawPointCountProvider);
                             },
                       icon: const Icon(Icons.remove),
                     ),
@@ -259,22 +256,15 @@ class TrackingSettingsScreen extends ConsumerWidget {
             Card(
               child: Column(
                 children: [
-                  ListTile(
-                    title: const Text('Saved points'),
-                    subtitle: Text('$count on this phone'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push(Routes.points),
-                  ),
-                  const Divider(height: 1),
                   FutureBuilder<String?>(
                     future: session.healthLabel(),
                     builder: (context, snap) {
                       return ListTile(
-                        title: const Text('Last point received'),
+                        title: const Text('Last location update'),
                         subtitle: Text(
                           snap.data ??
                               (status == TrackingStatus.on
-                                  ? 'Waiting for the first sample…'
+                                  ? 'Waiting for the first update…'
                                   : 'None while tracking is off'),
                         ),
                       );
