@@ -90,13 +90,6 @@ final visitedPlacesProvider = FutureProvider<List<VisitedPlace>>((ref) async {
   return ref.watch(placesRepositoryProvider).listVisitedPlaces();
 });
 
-Future<void> _postProcessPlaces(WidgetRef? ref, ProviderRef? pref) async {
-  final places = (ref?.read ?? pref!.read)(placesRepositoryProvider);
-  final seg = (ref?.read ?? pref!.read)(segmentationRepositoryProvider);
-  await places.consolidateDuplicates();
-  await seg.mergeNearbyVisits();
-}
-
 final todaysTimelineProvider = StreamProvider<List<TimelineEntry>>((ref) {
   final repo = ref.watch(segmentationRepositoryProvider);
   final gaps = ref.watch(gapsRepositoryProvider);
