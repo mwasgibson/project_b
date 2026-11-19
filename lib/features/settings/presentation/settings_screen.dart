@@ -5,8 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/providers.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/widgets/content_width.dart';
-import '../../tracking/tracking_providers.dart';
 import '../../../domain/tracking/location_tracker.dart';
+import '../../tracking/tracking_providers.dart';
 
 /// S13.
 class SettingsScreen extends ConsumerWidget {
@@ -61,9 +61,12 @@ class SettingsScreen extends ConsumerWidget {
                     title: 'Places',
                   ),
                   const Divider(height: 1),
-                  const _UnavailableTile(
-                    icon: Icons.download_outlined,
-                    title: 'Data and export',
+                  ListTile(
+                    leading: const Icon(Icons.download_outlined),
+                    title: const Text('Data and export'),
+                    subtitle: const Text('Export, retention, delete all'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push(Routes.data),
                   ),
                   const Divider(height: 1),
                   const _UnavailableTile(

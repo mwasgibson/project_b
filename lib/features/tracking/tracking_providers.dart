@@ -11,6 +11,7 @@ import '../../core/settings/setting_keys.dart';
 import '../../domain/places/place_resolver.dart';
 import '../../domain/timeline/timeline_entry.dart';
 import '../../domain/tracking/location_tracker.dart';
+import '../data/data_control_providers.dart';
 import '../places/data/platform_place_resolver.dart';
 import '../places/place_label_service.dart';
 import 'data/geolocator_location_tracker.dart';
@@ -125,6 +126,13 @@ final autoLabelEnabledProvider = StreamProvider<bool>((ref) {
   return repo.watch(SettingKeys.autoLabelEnabled).map((raw) => raw != 'false');
 });
 
+final rawRetentionDaysProvider = StreamProvider<int>((ref) {
+  final repo = ref.watch(settingsRepositoryProvider);
+  return repo.watch(SettingKeys.rawRetentionDays).map(
+        (raw) => int.tryParse(raw ?? '') ?? 30,
+      );
+});
+
 Future<void> setTrackingModeSetting(WidgetRef ref, TrackingMode mode) async {
   await ref.read(trackingSessionProvider).setMode(mode);
 }
@@ -135,9 +143,11 @@ Future<String> runSegmentation(WidgetRef ref) async {
       .read(segmentationRepositoryProvider)
       .runOnce(manual: true);
   await ref.read(placeLabelServiceProvider).processPending();
+  await ref.read(dataControlServiceProvider).purgeExpiredRawPoints();
   ref.invalidate(todaysTimelineProvider);
   ref.invalidate(todaysVisitsProvider);
   ref.invalidate(placesByIdProvider);
+  ref.invalidate(rawPointCountProvider);
 
   if (result.unprocessedBefore == 0) {
     return 'No new points to process';

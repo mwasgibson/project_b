@@ -8,6 +8,7 @@ import '../../features/onboarding/presentation/background_permission_screen.dart
 import '../../features/onboarding/presentation/location_permission_screen.dart';
 import '../../features/onboarding/presentation/welcome_screen.dart';
 import '../../features/settings/presentation/appearance_screen.dart';
+import '../../features/settings/presentation/data_screen.dart';
 import '../../features/settings/presentation/keep_alive_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/settings/presentation/tracking_settings_screen.dart';
@@ -29,6 +30,7 @@ abstract final class Routes {
   static const settings = '/settings';
   static const appearance = '/settings/appearance';
   static const trackingSettings = '/settings/tracking';
+  static const data = '/settings/data';
   static const keepAlive = '/help/keep-alive';
 }
 
@@ -135,6 +137,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'tracking',
                     builder: (context, state) => const TrackingSettingsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'data',
+                    builder: (context, state) => const DataScreen(),
                   ),
                 ],
               ),
