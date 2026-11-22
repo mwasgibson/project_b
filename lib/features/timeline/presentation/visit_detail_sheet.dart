@@ -195,7 +195,7 @@ class VisitDetailSheet extends ConsumerWidget {
                   builder: (ctx) => AlertDialog(
                     title: const Text('Remove this visit?'),
                     content: const Text(
-                      'It moves to Deleted visits in Settings. '
+                      'It moves to Trash in Settings. '
                       'You can restore it later or delete it forever there.',
                     ),
                     actions: [
