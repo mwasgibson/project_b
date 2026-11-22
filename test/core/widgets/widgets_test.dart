@@ -92,7 +92,7 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.calendar_month_outlined));
       await tester.pumpAndSettle();
-      expect(find.text('No events yet'), findsOneWidget);
+      expect(find.text('No movement logged'), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.settings_outlined));
       await tester.pumpAndSettle();

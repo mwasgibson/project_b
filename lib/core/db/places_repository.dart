@@ -30,7 +30,8 @@ class PlacesRepository {
   }
 
   Future<List<Place>> allActive() {
-    return (_db.select(_db.places)..where((t) => t.deleted.equals(false))).get();
+    return (_db.select(_db.places)..where((t) => t.deleted.equals(false)))
+        .get();
   }
 
   /// Nearest non-deleted place within its own radius (default 100 m).
@@ -56,8 +57,7 @@ class PlacesRepository {
     if (nearby != null) {
       // Prefer an existing place; fill name if the old one is empty.
       if ((nearby.name == null || nearby.name!.trim().isEmpty) &&
-          resolved.name != null &&
-          resolved.name!.trim().isNotEmpty) {
+          resolved.name.trim().isNotEmpty) {
         final now = DateTime.now().toUtc().millisecondsSinceEpoch;
         await (_db.update(_db.places)..where((t) => t.id.equals(nearby.id)))
             .write(
@@ -138,22 +138,22 @@ class PlacesRepository {
   }) async {
     final now = DateTime.now().toUtc().millisecondsSinceEpoch;
     await (_db.update(_db.places)..where((t) => t.id.equals(id))).write(
-          PlacesCompanion(
-            name: Value(name.trim()),
-            nameSource: const Value('user'),
-            updatedAt: Value(now),
-          ),
-        );
+      PlacesCompanion(
+        name: Value(name.trim()),
+        nameSource: const Value('user'),
+        updatedAt: Value(now),
+      ),
+    );
   }
 
   Future<void> softDelete(String id) async {
     final now = DateTime.now().toUtc().millisecondsSinceEpoch;
     await (_db.update(_db.places)..where((t) => t.id.equals(id))).write(
-          PlacesCompanion(
-            deleted: const Value(true),
-            updatedAt: Value(now),
-          ),
-        );
+      PlacesCompanion(
+        deleted: const Value(true),
+        updatedAt: Value(now),
+      ),
+    );
   }
 
   /// Merge place rows that are essentially the same spot; re-point visits.
@@ -264,10 +264,10 @@ class PlacesRepository {
         return false;
       });
       cluster.sort((a, b) => b.startAt.compareTo(a.startAt));
-      final lat = cluster.map((v) => v.lat).reduce((a, b) => a + b) /
-          cluster.length;
-      final lng = cluster.map((v) => v.lng).reduce((a, b) => a + b) /
-          cluster.length;
+      final lat =
+          cluster.map((v) => v.lat).reduce((a, b) => a + b) / cluster.length;
+      final lng =
+          cluster.map((v) => v.lng).reduce((a, b) => a + b) / cluster.length;
       result.add(
         VisitedPlace(
           key: 'geo:${lat.toStringAsFixed(4)},${lng.toStringAsFixed(4)}',

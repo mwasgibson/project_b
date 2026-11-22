@@ -1,4 +1,5 @@
 /// Domain models for weather (docs/02 F7). No network types here.
+library;
 
 class WeatherSnapshot {
   const WeatherSnapshot({

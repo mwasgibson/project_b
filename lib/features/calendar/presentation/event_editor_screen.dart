@@ -342,7 +342,7 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<int?>(
-              value: _reminderOffsetMin,
+              initialValue: _reminderOffsetMin,
               decoration: const InputDecoration(
                 labelText: 'Reminder',
                 border: OutlineInputBorder(),
