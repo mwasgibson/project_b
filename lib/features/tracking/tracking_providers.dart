@@ -81,6 +81,10 @@ final deletedVisitsProvider = StreamProvider((ref) {
   return ref.watch(segmentationRepositoryProvider).watchDeletedVisits();
 });
 
+final deletedPlacesProvider = StreamProvider((ref) {
+  return ref.watch(placesRepositoryProvider).watchDeletedPlaces();
+});
+
 final placesByIdProvider = FutureProvider<Map<String, Place>>((ref) async {
   final places = await ref.watch(placesRepositoryProvider).allActive();
   return {for (final p in places) p.id: p};

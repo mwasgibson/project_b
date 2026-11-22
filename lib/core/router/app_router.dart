@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/calendar/presentation/calendar_screen.dart';
 import '../../features/calendar/presentation/event_editor_screen.dart';
+import '../../features/map/presentation/day_map_screen.dart';
+import '../../features/map/presentation/trip_map_screen.dart';
 import '../../features/onboarding/presentation/background_permission_screen.dart';
 import '../../features/onboarding/presentation/location_permission_screen.dart';
 import '../../features/onboarding/presentation/welcome_screen.dart';
@@ -27,6 +29,14 @@ abstract final class Routes {
   static const calendar = '/calendar';
   static const eventNew = '/calendar/event/new';
   static String eventEdit(String id) => '/calendar/event/$id';
+  static String dayMap(DateTime day) {
+    final y = day.year.toString().padLeft(4, '0');
+    final m = day.month.toString().padLeft(2, '0');
+    final d = day.day.toString().padLeft(2, '0');
+    return '/map/day/$y-$m-$d';
+  }
+
+  static String tripMap(String id) => '/map/trip/$id';
   static const weather = '/weather';
   static const settings = '/settings';
   static const appearance = '/settings/appearance';
@@ -100,6 +110,25 @@ final routerProvider = Provider<GoRouter>((ref) {
           final id = state.pathParameters['id']!;
           if (id == 'new') return const EventEditorScreen();
           return EventEditorScreen(eventId: id);
+        },
+      ),
+      GoRoute(
+        path: '/map/day/:date',
+        builder: (context, state) {
+          final raw = state.pathParameters['date']!;
+          final parts = raw.split('-');
+          final day = DateTime(
+            int.parse(parts[0]),
+            int.parse(parts[1]),
+            int.parse(parts[2]),
+          );
+          return DayMapScreen(day: day);
+        },
+      ),
+      GoRoute(
+        path: '/map/trip/:id',
+        builder: (context, state) {
+          return TripMapScreen(tripId: state.pathParameters['id']!);
         },
       ),
       StatefulShellRoute.indexedStack(
