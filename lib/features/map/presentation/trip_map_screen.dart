@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/providers.dart';
 import '../../../core/theme/domain_colors.dart';
 import '../../../core/widgets/content_width.dart';
 import '../../../core/widgets/empty_state.dart';
