@@ -74,8 +74,8 @@ class SettingsScreen extends ConsumerWidget {
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.delete_outline),
-                    title: const Text('Deleted visits'),
-                    subtitle: const Text('Restore or remove for good'),
+                    title: const Text('Trash'),
+                    subtitle: const Text('Restore or delete removed visits'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => context.push(Routes.trash),
                   ),
