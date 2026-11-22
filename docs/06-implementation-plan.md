@@ -2,7 +2,7 @@
 
 ## Approach
 
-Build order follows risk. The riskiest thing is reliable background tracking, proven early. See progress log below for the lived path and constraints (Android-first, no iPhone hardware, Supabase deferred to Phase 9).
+Build order follows risk. The riskiest thing is reliable background tracking, proven early. Lived path and constraints: [`09-build-roadmap.md`](09-build-roadmap.md).
 
 ## Status
 
@@ -18,33 +18,39 @@ Build order follows risk. The riskiest thing is reliable background tracking, pr
 
 - [x] S17 Data and export — JSON / GPX, typed `DELETE`, retention
 - [x] Tracking on/off (not only pause); settings under Settings → Tracking
-- [x] Raw samples stay on-device for segmentation only — **not shown in UI**
-- [x] Soft-delete visits → Settings → Deleted visits (restore / permanent)
-- [x] Places list (S15): **unique places**, visit count, detail history (dates/times)
-- [x] Same-place visit merge on timeline (overlap + proximity + same name; prefer real names over plus codes)
-- [x] Gap rows when tracking was paused / off / no location
-- [x] Timeline left-rail design (visits / trips / gaps)
-- [ ] Day/trip maps (optional; needs tiles)
-- [ ] Weather chip on calendar day (optional)
+- [x] Raw samples on-device for segmentation only — **not shown in UI**
+- [x] Soft-delete visits and places → Settings → **Trash** (tabs, select-all, restore / permanent)
+- [x] Places list (S15): unique places, visit count, detail history
+- [x] Same-place visit merge (overlap + proximity + same name; prefer real names over plus codes)
+- [x] Gap rows when tracking was paused / off
+- [x] Timeline left-rail design
+- [x] Calendar weather chip (daily forecast for selected day)
+- [x] Day map (visit pins) and trip map (start→end line) via OSM tiles
+- [x] Adaptive app icon (teal `#0F766E`, pin + stem)
 
 ## Phase 7: Weather (F7)
 
 - [x] `WeatherProvider` (Open-Meteo), coordinate rounding (~1 km), cache table
 - [x] Weather screen S12; offline stale-data label
-- [ ] Weather chip on calendar day (optional polish)
+- [x] Weather chip on calendar day
 
 ## Visit & place rules (product)
 
-1. **One continuous stay at one location = one visit** on the day timeline, even if tracking paused/stopped in between (gap row explains the hole).
-2. **Places list** shows each location once; tap for every visit date/time and count.
-3. Nearby duplicate place records (~120 m) are consolidated; visits are re-pointed.
-4. Overlapping segmenter fragments and plus-code vs named labels at the same spot are merged (~300 m / same name).
-5. Raw GPS points are not a user-facing concept.
+1. **One continuous stay at one location = one visit** on the day timeline; pause/stop shows a **gap**, not a second place card.
+2. **Places list** shows each location once; tap for visit dates/times and count.
+3. Nearby duplicate place rows (~120 m) are consolidated; visits re-pointed.
+4. Overlapping segmenter fragments and plus-code vs named labels merge (~300 m / same name).
+5. Raw GPS points are not user-facing.
 
 ## Progress log
 
 - 2026-11-17: Phase 6 calendar core.
 - 2026-11-19: Calendar as movement log; Phase 7 weather; Phase 8 data control.
-- 2026-11-19: Find visits feedback; rename dialog dispose fix; soft-delete trash.
-- 2026-11-19: Hide points from UI; gap rows; timeline rail; places with history.
-- 2026-11-19: Fix same-place timeline spam (merge overlaps + same name + consolidate).
+- 2026-11-19: Visit merge, places history, points hidden, Trash for visits.
+- 2026-11-22: Calendar weather chip; day/trip maps; places in Trash; docs numbering cleaned (09 roadmap, 10 code health only).
+
+## Next
+
+1. MVP soak on device.
+2. Phase 3 hardening (boot / swipe-kill / battery log) as needed.
+3. Phase 9 encrypted sync when ready.

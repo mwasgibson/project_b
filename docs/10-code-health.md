@@ -1,29 +1,30 @@
-# Code health snapshot (2026-11-22)
+# Code health snapshot
 
-Skills used: **code-quality**, **design**.
+**Date:** 2026-11-22  
+Skills: code-quality, design.
 
 ## Score (MVP)
 
 | Area | Score | Notes |
 | --- | --- | --- |
-| Architecture | 8/10 | Feature-first; domain interfaces (tracker, place resolver, weather) |
-| Privacy surface | 9/10 | Local SQLite; points hidden from UI; retention + delete all |
-| UI consistency | 8/10 | Theme tokens + domain colours; timeline rail |
-| Test coverage | 4/10 | Segmenter / place-match unit tests only |
-| Background reliability | 6/10 | FGS on Android; OEM kill still a gap |
-| Dead code | 9/10 | Points screen removed |
+| Architecture | 8/10 | Feature-first; tracker / place / weather interfaces |
+| Privacy | 9/10 | Local SQLite; points hidden; export / delete / retention |
+| UI consistency | 8/10 | Theme tokens; timeline rail; Trash |
+| Tests | 4/10 | Segmenter / place-match unit tests mainly |
+| Background reliability | 6/10 | FGS OK; OEM kill unproven long-term |
 
-## Recent fixes
+## Recent quality work
 
-- Same-place visit merge; places history; Trash (visits + places)
-- Calendar weather chip; day/trip OSM maps
-- Adaptive launcher icon (teal pin); fallback mipmaps still need a clean rebuild/reinstall if the Flutter logo appears
+- Same-place visit merge; place consolidate
+- Dead `points_screen` removed
+- Trash multi-select for visits and places
+- Adaptive launcher icon (vector); Flutter default mipmaps removed
+- Docs: single numbering scheme (no stub dual files)
 
-## Remaining debt
+## Debt (non-blocking)
 
-1. Timeline provider side-effect segmentation → dedicated job later.
-2. Trip maps are start→end lines, not full GPS polylines.
-3. Phase 9 sync not started.
-4. More unit tests for merge / place consolidate.
-
-Canonical filename: **`docs/10-code-health.md`** (not `08-…`).
+1. `todaysTimelineProvider` side-effect segmentation → dedicated job later.
+2. Soft `catch` on weather/battery — intentional.
+3. Trip maps are endpoints only, not full polylines.
+4. Expand tests for `mergeNearbyVisits` and place consolidate.
+5. Phase 9 sync not started.
