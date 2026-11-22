@@ -13,8 +13,10 @@ import '../../../core/theme/domain_colors.dart';
 import '../../../core/widgets/content_width.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../domain/calendar/day_agenda_item.dart';
+import '../../../domain/weather/weather_models.dart';
 import '../../timeline/presentation/visit_detail_sheet.dart';
 import '../../tracking/tracking_providers.dart';
+import '../../weather/weather_providers.dart';
 import '../calendar_providers.dart';
 import '../data/ics_export.dart';
 
@@ -65,6 +67,18 @@ class CalendarScreen extends ConsumerWidget {
     return '${meters.round()} m';
   }
 
+  static IconData _weatherIcon(int code) {
+    return switch (weatherIconKind(code)) {
+      IconDataForWeather.sun => Icons.wb_sunny_outlined,
+      IconDataForWeather.cloudSun => Icons.wb_cloudy_outlined,
+      IconDataForWeather.cloud => Icons.cloud_outlined,
+      IconDataForWeather.fog => Icons.foggy,
+      IconDataForWeather.rain => Icons.umbrella_outlined,
+      IconDataForWeather.snow => Icons.ac_unit,
+      IconDataForWeather.storm => Icons.thunderstorm_outlined,
+    };
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final month = ref.watch(visibleCalendarMonthProvider);
@@ -73,10 +87,12 @@ class CalendarScreen extends ConsumerWidget {
     final agenda = ref.watch(dayAgendaProvider).valueOrNull ?? [];
     final events = ref.watch(eventsForSelectedDayProvider).valueOrNull ?? [];
     final places = ref.watch(placesByIdProvider).valueOrNull ?? {};
+    final dayWeather = ref.watch(weatherForDayProvider(selected));
     final monthLabel = DateFormat.yMMMM().format(month);
     final dayLabel = DateFormat.MMMEd().format(selected);
     final timeFmt = DateFormat.Hm();
     final domain = context.domainColors;
+    final scheme = Theme.of(context).colorScheme;
 
     final first = DateTime(month.year, month.month, 1);
     final lead = first.weekday - 1;
@@ -92,6 +108,11 @@ class CalendarScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Calendar'),
         actions: [
+          IconButton(
+            tooltip: 'Map this day',
+            onPressed: () => context.push(Routes.dayMap(selected)),
+            icon: const Icon(Icons.map_outlined),
+          ),
           IconButton(
             tooltip: 'Export events (.ics)',
             onPressed: () => _exportDay(context, ref, events),
@@ -154,9 +175,7 @@ class CalendarScreen extends ConsumerWidget {
                       child: Text(
                         w,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
+                              color: scheme.onSurfaceVariant,
                             ),
                       ),
                     ),
@@ -203,12 +222,21 @@ class CalendarScreen extends ConsumerWidget {
                         '$tripCount trip${tripCount == 1 ? '' : 's'}',
                     ].join(' · '),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant,
+                          color: scheme.onSurfaceVariant,
                         ),
                   ),
               ],
             ),
+            if (dayWeather != null) ...[
+              const SizedBox(height: 8),
+              ActionChip(
+                avatar: Icon(_weatherIcon(dayWeather.weatherCode), size: 18),
+                label: Text(
+                  '${dayWeather.tempMaxC.round()}° / ${dayWeather.tempMinC.round()}° · ${weatherCodeLabel(dayWeather.weatherCode)}',
+                ),
+                onPressed: () => context.go(Routes.weather),
+              ),
+            ],
             const SizedBox(height: 8),
             if (agenda.isEmpty)
               const EmptyState(
@@ -250,6 +278,9 @@ class CalendarScreen extends ConsumerWidget {
                         ),
                         title: const Text('Trip'),
                         subtitle: Text(_tripSubtitle(item.trip!, timeFmt)),
+                        trailing: const Icon(Icons.map_outlined),
+                        onTap: () =>
+                            context.push(Routes.tripMap(item.trip!.id)),
                       ),
                     ),
                   DayAgendaKind.event => Card(
@@ -259,7 +290,7 @@ class CalendarScreen extends ConsumerWidget {
                           item.event!.allDay
                               ? Icons.calendar_today_outlined
                               : Icons.event,
-                          color: Theme.of(context).colorScheme.primary,
+                          color: scheme.primary,
                         ),
                         title: Text(item.event!.title),
                         subtitle: Text(_eventSubtitle(item.event!, timeFmt)),
