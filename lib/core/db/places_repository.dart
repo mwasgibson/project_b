@@ -34,6 +34,13 @@ class PlacesRepository {
         .get();
   }
 
+  Stream<List<Place>> watchDeletedPlaces() {
+    return (_db.select(_db.places)
+          ..where((t) => t.deleted.equals(true))
+          ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
+        .watch();
+  }
+
   /// Nearest non-deleted place within its own radius (default 100 m).
   Future<Place?> findNearby(double lat, double lng) async {
     final places = await allActive();
@@ -55,7 +62,6 @@ class PlacesRepository {
   }) async {
     final nearby = await findNearby(lat, lng);
     if (nearby != null) {
-      // Prefer an existing place; fill name if the old one is empty.
       if ((nearby.name == null || nearby.name!.trim().isEmpty) &&
           resolved.name.trim().isNotEmpty) {
         final now = DateTime.now().toUtc().millisecondsSinceEpoch;
@@ -147,13 +153,40 @@ class PlacesRepository {
   }
 
   Future<void> softDelete(String id) async {
+    await softDeleteMany([id]);
+  }
+
+  Future<void> softDeleteMany(List<String> ids) async {
+    if (ids.isEmpty) return;
     final now = DateTime.now().toUtc().millisecondsSinceEpoch;
-    await (_db.update(_db.places)..where((t) => t.id.equals(id))).write(
+    await (_db.update(_db.places)..where((t) => t.id.isIn(ids))).write(
       PlacesCompanion(
         deleted: const Value(true),
         updatedAt: Value(now),
       ),
     );
+  }
+
+  Future<void> restorePlaces(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+    await (_db.update(_db.places)..where((t) => t.id.isIn(ids))).write(
+      PlacesCompanion(
+        deleted: const Value(false),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  Future<void> permanentlyDeletePlaces(List<String> ids) async {
+    if (ids.isEmpty) return;
+    await _db.transaction(() async {
+      // Detach visits rather than cascade-delete history.
+      await (_db.update(_db.visits)..where((t) => t.placeId.isIn(ids))).write(
+        const VisitsCompanion(placeId: Value(null)),
+      );
+      await (_db.delete(_db.places)..where((t) => t.id.isIn(ids))).go();
+    });
   }
 
   /// Merge place rows that are essentially the same spot; re-point visits.
@@ -164,7 +197,6 @@ class PlacesRepository {
     var merged = 0;
     final used = <String>{};
 
-    // Prefer user-named, then more recently updated.
     places.sort((a, b) {
       final au = a.nameSource == 'user' ? 0 : 1;
       final bu = b.nameSource == 'user' ? 0 : 1;
@@ -203,7 +235,6 @@ class PlacesRepository {
     return merged;
   }
 
-  /// Unique places with every non-deleted visit attached, newest first.
   Future<List<VisitedPlace>> listVisitedPlaces() async {
     await consolidateDuplicates();
 
@@ -216,7 +247,6 @@ class PlacesRepository {
 
     final places = {for (final p in await allActive()) p.id: p};
 
-    // placeId → visits
     final byPlace = <String, List<Visit>>{};
     final unlabelled = <Visit>[];
 
@@ -250,7 +280,6 @@ class PlacesRepository {
       );
     }
 
-    // Cluster unlabelled visits by proximity into synthetic places.
     final remaining = [...unlabelled];
     while (remaining.isNotEmpty) {
       final seed = remaining.removeAt(0);

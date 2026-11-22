@@ -60,3 +60,18 @@ final weatherSnapshotProvider =
     rethrow;
   }
 });
+
+/// Daily row for a local calendar day, if present in the snapshot.
+final weatherForDayProvider =
+    Provider.family<DailyForecast?, DateTime>((ref, day) {
+  final snap = ref.watch(weatherSnapshotProvider).valueOrNull;
+  if (snap == null) return null;
+  for (final d in snap.daily) {
+    if (d.date.year == day.year &&
+        d.date.month == day.month &&
+        d.date.day == day.day) {
+      return d;
+    }
+  }
+  return null;
+});

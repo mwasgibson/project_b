@@ -18,12 +18,6 @@ class DayMapScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final visitsAsync = ref.watch(
-      segmentationRepositoryProvider.select(
-        (repo) => repo.watchVisitsForDay(day),
-      ),
-    );
-    // Riverpod StreamProvider wrapper:
     final stream = ref.watch(_visitsForDayProvider(day));
     final places = ref.watch(placesByIdProvider).valueOrNull ?? {};
     final domain = context.domainColors;
