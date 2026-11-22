@@ -1,5 +1,5 @@
 # Moved
 
-The **lived build roadmap** is **[`docs/09-build-roadmap.md`](09-build-roadmap.md)**.
+Lived build roadmap: **[`docs/09-build-roadmap.md`](09-build-roadmap.md)**.
 
-`docs/07-decisions.md` is the architecture decision log (ADRs). Do not put roadmap narrative here.
+`docs/07-decisions.md` is the ADR log only.
