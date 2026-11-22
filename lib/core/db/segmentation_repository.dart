@@ -164,7 +164,6 @@ class SegmentationRepository {
         final b = visits[i + 1];
         final aEnd = a.endAt ?? a.startAt;
         final bEnd = b.endAt ?? b.startAt;
-        // Negative gap = overlapping windows (common with batch segmentation).
         final gap = b.startAt - aEnd;
         final dist = _haversineM(a.lat, a.lng, b.lat, b.lng);
 
@@ -179,7 +178,6 @@ class SegmentationRepository {
 
         final spatialOk =
             dist <= _mergeRadiusM || samePlaceId || sameName;
-        // Allow overlap (gap < 0) and gaps up to 24h at the same place.
         final temporalOk = gap <= _mergeMaxGap.inMilliseconds;
 
         final canMerge =
@@ -192,7 +190,6 @@ class SegmentationRepository {
         final newEnd = math.max(aEnd, bEnd);
         final pts = (a.pointCount ?? 0) + (b.pointCount ?? 0);
 
-        // Prefer a real place name over a plus-code style id when choosing placeId.
         final placeId = _preferPlaceId(
           a.placeId,
           b.placeId,
@@ -219,7 +216,6 @@ class SegmentationRepository {
                 ),
               );
 
-          // Drop trips that only linked the fragments of the same stay.
           await (_db.update(_db.trips)
                 ..where(
                   (t) =>
@@ -247,7 +243,6 @@ class SegmentationRepository {
     return totalMerged;
   }
 
-  /// Prefer place with a human name over plus-code / empty labels.
   static String? _preferPlaceId(
     String? a,
     String? b,
@@ -265,7 +260,6 @@ class SegmentationRepository {
   }
 
   static bool _looksLikePlusCode(String name) {
-    // e.g. QPG2+5WX — short Open Location Code fragments from geocoders.
     final n = name.trim();
     if (n.length < 6 || n.length > 12) return false;
     return RegExp(r'^[A-Z0-9]+\+[A-Z0-9]+$', caseSensitive: false).hasMatch(n);
@@ -359,8 +353,13 @@ class SegmentationRepository {
   }
 
   Future<void> restoreVisit(String id) async {
+    await restoreVisits([id]);
+  }
+
+  Future<void> restoreVisits(List<String> ids) async {
+    if (ids.isEmpty) return;
     final now = DateTime.now().toUtc().millisecondsSinceEpoch;
-    await (_db.update(_db.visits)..where((t) => t.id.equals(id))).write(
+    await (_db.update(_db.visits)..where((t) => t.id.isIn(ids))).write(
           VisitsCompanion(
             deleted: const Value(false),
             updatedAt: Value(now),
@@ -369,10 +368,19 @@ class SegmentationRepository {
   }
 
   Future<void> permanentlyDeleteVisit(String id) async {
-    await (_db.delete(_db.trips)
-          ..where((t) => t.fromVisitId.equals(id) | t.toVisitId.equals(id)))
-        .go();
-    await (_db.delete(_db.visits)..where((t) => t.id.equals(id))).go();
+    await permanentlyDeleteVisits([id]);
+  }
+
+  Future<void> permanentlyDeleteVisits(List<String> ids) async {
+    if (ids.isEmpty) return;
+    await _db.transaction(() async {
+      await (_db.delete(_db.trips)
+            ..where(
+              (t) => t.fromVisitId.isIn(ids) | t.toVisitId.isIn(ids),
+            ))
+          .go();
+      await (_db.delete(_db.visits)..where((t) => t.id.isIn(ids))).go();
+    });
   }
 
   Future<void> attachPlace({
