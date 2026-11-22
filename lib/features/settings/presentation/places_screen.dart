@@ -50,7 +50,8 @@ class PlacesScreen extends ConsumerWidget {
                 return Card(
                   child: ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                      backgroundColor:
+                          theme.colorScheme.surfaceContainerHighest,
                       child: Icon(
                         Icons.place_outlined,
                         color: theme.colorScheme.primary,
@@ -65,8 +66,8 @@ class PlacesScreen extends ConsumerWidget {
                           p.address!.trim(),
                       ].join(' · '),
                     ),
-                    isThreeLine: p.address != null &&
-                        p.address!.trim().isNotEmpty,
+                    isThreeLine:
+                        p.address != null && p.address!.trim().isNotEmpty,
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => context.push(Routes.placeDetail(p.key)),
                   ),
@@ -118,6 +119,7 @@ class PlaceDetailScreen extends ConsumerWidget {
             final p = place;
             final countLabel =
                 p.visitCount == 1 ? '1 visit' : '${p.visitCount} visits';
+            final canTrash = p.placeId != null;
 
             return ListView(
               padding: const EdgeInsets.all(16),
@@ -144,6 +146,49 @@ class PlaceDetailScreen extends ConsumerWidget {
                     color: theme.colorScheme.primary,
                   ),
                 ),
+                if (canTrash) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final ok = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Remove this place?'),
+                          content: const Text(
+                            'The name moves to Trash. Visits stay on the timeline '
+                            'without this label until you restore it.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Remove'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (ok != true || !context.mounted) return;
+                      await ref
+                          .read(placesRepositoryProvider)
+                          .softDelete(p.placeId!);
+                      ref.invalidate(visitedPlacesProvider);
+                      ref.invalidate(placesByIdProvider);
+                      ref.invalidate(deletedPlacesProvider);
+                      if (context.mounted) context.pop();
+                    },
+                    icon: Icon(
+                      Icons.delete_outline,
+                      color: theme.colorScheme.error,
+                    ),
+                    label: Text(
+                      'Remove place',
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 20),
                 Text('Visits', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
